@@ -11,6 +11,8 @@ from typing import Any
 from repo_brain import __version__
 from repo_brain.indexer import index_repository
 from repo_brain.repository import RepositoryError, resolve_repository
+from repo_brain.skills.evidence import build_evidence
+from repo_brain.skills.localize import localize
 from repo_brain.skills.repo_map import repository_map
 
 
@@ -24,6 +26,11 @@ def _parser() -> argparse.ArgumentParser:
     index = subparsers.add_parser("index")
     index.add_argument("path", nargs="?", type=Path)
     subparsers.add_parser("map")
+    localization = subparsers.add_parser("localize")
+    localization.add_argument("task")
+    evidence = subparsers.add_parser("evidence")
+    evidence.add_argument("task")
+    evidence.add_argument("--max-chars", type=int, default=16_000)
     return parser
 
 
@@ -58,6 +65,37 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(json.dumps(_envelope("map", str(root), map_data, [], []), sort_keys=True))
         else:
             print(json.dumps(map_data, indent=2, sort_keys=True))
+        return 0
+    if args.command == "localize":
+        localization_data = [asdict(item) for item in localize(root, args.task)]
+        if args.json:
+            print(
+                json.dumps(
+                    _envelope("localize", str(root), localization_data, [], []),
+                    sort_keys=True,
+                )
+            )
+        else:
+            for item in localization_data:
+                print(f"{item['score']:>6}  {item['path']}  ({'; '.join(item['reasons'])})")
+        return 0
+    if args.command == "evidence":
+        evidence_data = build_evidence(root, args.task, args.max_chars)
+        if args.json:
+            print(
+                json.dumps(
+                    _envelope(
+                        "evidence",
+                        str(root),
+                        asdict(evidence_data.bundle),
+                        list(evidence_data.warnings),
+                        [],
+                    ),
+                    sort_keys=True,
+                )
+            )
+        else:
+            print(evidence_data.render())
         return 0
     result = index_repository(root)
     data: dict[str, Any] = asdict(result)
