@@ -18,3 +18,12 @@ def test_malformed_config_returns_storage_error(tmp_path: Path) -> None:
     state.mkdir()
     (state / "config.json").write_text("{")
     assert main(["--repo", str(tmp_path), "index"]) == 3
+
+
+def test_map_command_returns_repository_summary(tmp_path: Path, capsys: object) -> None:
+    (tmp_path / "a.py").write_text("def run():\n    pass\n")
+    assert main(["--repo", str(tmp_path), "index"]) == 0
+    capsys.readouterr()  # type: ignore[attr-defined]
+    assert main(["--repo", str(tmp_path), "--json", "map"]) == 0
+    output = json.loads(capsys.readouterr().out)  # type: ignore[attr-defined]
+    assert output["data"]["symbol_counts"]["function"] == 1

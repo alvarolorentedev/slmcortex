@@ -11,6 +11,7 @@ from typing import Any
 from repo_brain import __version__
 from repo_brain.indexer import index_repository
 from repo_brain.repository import RepositoryError, resolve_repository
+from repo_brain.skills.repo_map import repository_map
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -22,6 +23,7 @@ def _parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
     index = subparsers.add_parser("index")
     index.add_argument("path", nargs="?", type=Path)
+    subparsers.add_parser("map")
     return parser
 
 
@@ -44,16 +46,25 @@ def _envelope(
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
-    selected = args.path or args.repo
+    selected = getattr(args, "path", None) or args.repo
     try:
         root = resolve_repository(selected)
     except RepositoryError as exc:
         print(str(exc), file=sys.stderr)
         return 3
+    if args.command == "map":
+        map_data = repository_map(root)
+        if args.json:
+            print(json.dumps(_envelope("map", str(root), map_data, [], []), sort_keys=True))
+        else:
+            print(json.dumps(map_data, indent=2, sort_keys=True))
+        return 0
     result = index_repository(root)
-    data = asdict(result)
-    warnings = list(data.pop("warnings"))
-    errors = list(data.pop("errors"))
+    data: dict[str, Any] = asdict(result)
+    warnings = list(result.warnings)
+    errors = list(result.errors)
+    data.pop("warnings")
+    data.pop("errors")
     if args.json:
         print(json.dumps(_envelope("index", str(root), data, warnings, errors), sort_keys=True))
     elif errors:

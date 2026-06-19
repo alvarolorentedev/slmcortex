@@ -5,8 +5,14 @@ import os
 from collections import Counter
 from pathlib import Path
 
+from repo_brain.analyzers.base import Analyzer
+from repo_brain.analyzers.javascript import JavaScriptAnalyzer
+from repo_brain.analyzers.python import PythonAnalyzer
 from repo_brain.config import ConfigError, load_config, state_dir
-from repo_brain.models import FileRecord, IndexResult
+from repo_brain.graph.dependencies import resolve_dependency
+from repo_brain.graph.tests import discover_tests
+from repo_brain.language_detection import detect_frameworks
+from repo_brain.models import DependencyEdge, FileRecord, IndexResult, SymbolRecord
 from repo_brain.repository import RepositoryError, git_state, resolve_repository
 from repo_brain.storage.sqlite_store import SQLiteStore
 
@@ -121,12 +127,54 @@ def index_repository(path: Path | str | None = None) -> IndexResult:
                 warnings.append(f"{file_path}: {exc}")
     removed = len(set(previous) - {record.path for record in records})
     store.replace_files(records)
+    symbols: list[SymbolRecord] = []
+    dependencies: list[DependencyEdge] = []
+    analysis_errors: list[tuple[str, str]] = []
+    javascript_analyzer = JavaScriptAnalyzer()
+    analyzers: dict[str, Analyzer] = {
+        "python": PythonAnalyzer(),
+        "javascript": javascript_analyzer,
+        "typescript": javascript_analyzer,
+    }
+    for record in records:
+        analyzer = analyzers.get(record.language)
+        if analyzer is None or record.is_generated:
+            continue
+        try:
+            source = (root / record.path).read_text(errors="replace")
+            analysis = analyzer.analyze(Path(record.path), source)
+            symbols.extend(analysis.symbols)
+            dependencies.extend(analysis.dependencies)
+            analysis_errors.extend((record.path, error) for error in analysis.diagnostics)
+        except OSError as exc:
+            analysis_errors.append((record.path, str(exc)))
+    file_paths = {record.path for record in records}
+    resolved_dependencies = [
+        type(edge)(
+            edge.source_file,
+            edge.target,
+            edge.kind,
+            resolve_dependency(
+                edge.source_file,
+                edge.target,
+                file_paths,
+                next(
+                    (record.language for record in records if record.path == edge.source_file),
+                    "unknown",
+                ),
+            ),
+        )
+        for edge in dependencies
+    ]
+    tests = discover_tests(records, symbols)
+    store.replace_analysis(symbols, resolved_dependencies, tests, analysis_errors)
     revision, dirty = git_state(root)
     languages = dict(Counter(record.language for record in records))
     store.set_metadata("root", str(root))
     store.set_metadata("revision", revision or "")
     store.set_metadata("dirty", dirty)
     store.set_metadata("languages", languages)
+    store.set_metadata("frameworks", sorted(detect_frameworks(root)))
     return IndexResult(
         scanned,
         added,
@@ -139,4 +187,3 @@ def index_repository(path: Path | str | None = None) -> IndexResult:
         (),
         languages,
     )
-
