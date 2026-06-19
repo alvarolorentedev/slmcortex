@@ -27,3 +27,14 @@ def test_map_command_returns_repository_summary(tmp_path: Path, capsys: object) 
     assert main(["--repo", str(tmp_path), "--json", "map"]) == 0
     output = json.loads(capsys.readouterr().out)  # type: ignore[attr-defined]
     assert output["data"]["symbol_counts"]["function"] == 1
+
+
+def test_localize_and_evidence_commands(tmp_path: Path, capsys: object) -> None:
+    (tmp_path / "auth.py").write_text("def authenticate(token):\n    return bool(token)\n")
+    main(["--repo", str(tmp_path), "index"])
+    capsys.readouterr()  # type: ignore[attr-defined]
+    assert main(["--repo", str(tmp_path), "--json", "localize", "authenticate token"]) == 0
+    localized = json.loads(capsys.readouterr().out)  # type: ignore[attr-defined]
+    assert localized["data"][0]["path"] == "auth.py"
+    assert main(["--repo", str(tmp_path), "evidence", "authenticate token"]) == 0
+    assert "auth.py:" in capsys.readouterr().out  # type: ignore[attr-defined]

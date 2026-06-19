@@ -62,6 +62,10 @@ class SQLiteStore:
                     file_path TEXT NOT NULL,
                     message TEXT NOT NULL
                 );
+                CREATE VIRTUAL TABLE IF NOT EXISTS search_index USING fts5(
+                    file_path UNINDEXED,
+                    content
+                );
                 INSERT OR IGNORE INTO schema_migrations(version) VALUES (1);
                 INSERT OR REPLACE INTO metadata(key, value) VALUES ('schema_version', '1');
                 """
@@ -130,6 +134,7 @@ class SQLiteStore:
             connection.execute("DELETE FROM dependencies")
             connection.execute("DELETE FROM tests")
             connection.execute("DELETE FROM analysis_errors")
+            connection.execute("DELETE FROM search_index")
             connection.executemany(
                 "INSERT INTO symbols VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                 [
@@ -168,6 +173,16 @@ class SQLiteStore:
                 ],
             )
             connection.executemany("INSERT INTO analysis_errors VALUES (?, ?)", list(errors))
+            connection.executemany(
+                "INSERT INTO search_index(file_path, content) VALUES (?, ?)",
+                [
+                    (
+                        item.file_path,
+                        f"{item.file_path} {item.name} {item.qualified_name} {item.signature}",
+                    )
+                    for item in symbols
+                ],
+            )
 
     def symbols(self) -> list[SymbolRecord]:
         with self.connect() as connection:
@@ -188,3 +203,14 @@ class SQLiteStore:
                 {"path": row[0], "message": row[1]}
                 for row in connection.execute("SELECT file_path, message FROM analysis_errors")
             ]
+
+    def search(self, tokens: set[str]) -> list[str]:
+        if not tokens:
+            return []
+        query = " OR ".join(f'"{token}"' for token in sorted(tokens))
+        with self.connect() as connection:
+            rows = connection.execute(
+                "SELECT DISTINCT file_path FROM search_index WHERE search_index MATCH ? LIMIT 50",
+                (query,),
+            )
+            return [str(row[0]) for row in rows]
