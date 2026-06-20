@@ -14,6 +14,7 @@ def load_model(adapter: Path | None = None):
 
 def generate_text(model, tokenizer, prompt: str) -> tuple[str, int, int]:
     from mlx_lm import generate
+    from mlx_lm.sample_utils import make_sampler
 
     config = base_config()
     formatted = tokenizer.apply_chat_template(
@@ -26,7 +27,7 @@ def generate_text(model, tokenizer, prompt: str) -> tuple[str, int, int]:
         tokenizer,
         prompt=formatted,
         max_tokens=config["max_tokens"],
-        temp=config["temperature"],
+        sampler=make_sampler(config["temperature"]),
         verbose=False,
     )
     return output, len(tokenizer.encode(formatted)), len(tokenizer.encode(output))
