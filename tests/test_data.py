@@ -66,3 +66,4 @@ def test_checked_in_toy_data_is_balanced_and_held_out():
         "test_generation": 20,
     }
     assert not ({row.id for row in train} & {row.id for row in evaluation})
+    assert all(row.execution is not None for row in evaluation)

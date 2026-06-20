@@ -22,6 +22,7 @@ def generate_text(model, tokenizer, prompt: str) -> tuple[str, int, int]:
         tokenize=False,
         add_generation_prompt=True,
     )
+    tokenizer.eos_token_ids.add(tokenizer.convert_tokens_to_ids("<|im_end|>"))
     output = generate(
         model,
         tokenizer,
@@ -30,4 +31,5 @@ def generate_text(model, tokenizer, prompt: str) -> tuple[str, int, int]:
         sampler=make_sampler(config["temperature"]),
         verbose=False,
     )
+    output = output.split("<|im_end|>", 1)[0].rstrip()
     return output, len(tokenizer.encode(formatted)), len(tokenizer.encode(output))

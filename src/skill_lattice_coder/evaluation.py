@@ -10,6 +10,7 @@ from .metrics import (
     classify_hypothesis,
     extract_code,
     fuzzy_match,
+    paired_execution_comparison,
     python_syntax_valid,
 )
 from .schemas import EvaluationResult
@@ -45,7 +46,11 @@ def evaluate(
                     generation = infer(
                         mode, example.prompt, skill=skill, dry_run=dry_run
                     )
-                    text = example.target if dry_run else generation.generation
+                    text = (
+                        example.target
+                        if dry_run
+                        else extract_code(generation.generation)
+                    )
                     syntax = (
                         python_syntax_valid(text)
                         if example.task_type != "test_generation"
@@ -53,9 +58,7 @@ def evaluate(
                     )
                     execution = None
                     if example.execution and not dry_run:
-                        execution, _ = run_fixture(
-                            example.execution, extract_code(text)
-                        )
+                        execution, _ = run_fixture(example.execution, text)
                     result = EvaluationResult(
                         example_id=example.id,
                         task_type=example.task_type,
@@ -99,11 +102,17 @@ def evaluate(
         task: aggregate_results(task_rows)
         for task, task_rows in _group_by_task(rows).items()
     }
-    hypothesis = "inconclusive" if dry_run else classify_hypothesis(summary)
-    report = _report(summary, task_summary, hypothesis)
+    comparison = paired_execution_comparison(rows)
+    hypothesis = "inconclusive" if dry_run else classify_hypothesis(summary, comparison)
+    report = _report(summary, task_summary, comparison, hypothesis)
     write_json(
         output / "summary.json",
-        {"hypothesis": hypothesis, "modes": summary, "tasks": task_summary},
+        {
+            "hypothesis": hypothesis,
+            "generic_vs_lattice_execution": comparison,
+            "modes": summary,
+            "tasks": task_summary,
+        },
     )
     (output / "report.md").write_text(report)
     return output
@@ -121,7 +130,9 @@ def _group_by_task(rows: list[dict]) -> dict[str, list[dict]]:
     return by_task
 
 
-def _report(summary: dict, task_summary: dict, hypothesis: str) -> str:
+def _report(
+    summary: dict, task_summary: dict, comparison: dict, hypothesis: str
+) -> str:
     lines = [
         "# SkillLatticeCoder Evaluation",
         "",
@@ -140,16 +151,19 @@ def _report(summary: dict, task_summary: dict, hypothesis: str) -> str:
             f"{_format(value['execution_pass_rate'])} | {value['active_adapter_parameters']:.0f} |"
         )
     lines.extend(["", "## Research questions", ""])
-    base = summary.get("base", {}).get("fuzzy_score", 0)
-    generic = summary.get("generic", {}).get("fuzzy_score", 0)
-    lattice = summary.get("lattice", {}).get("fuzzy_score", 0)
-    single = summary.get("single-skill", {}).get("fuzzy_score", 0)
+    base = summary.get("base", {}).get("execution_pass_rate", 0)
+    generic = summary.get("generic", {}).get("execution_pass_rate", 0)
+    lattice = summary.get("lattice", {}).get("execution_pass_rate", 0)
+    single = summary.get("single-skill", {}).get("execution_pass_rate", 0)
     lines.extend(
         [
-            f"1. Generic improves over base: **{generic > base}**.",
-            f"2. Single skill improves over generic: **{single > generic}**.",
-            f"3. Lattice improves over generic: **{lattice > generic}**.",
-            "4. Parameter efficiency is reported in `summary.json`.",
+            f"1. Generic improves over base: **{_improves(generic, base)}**.",
+            f"2. Single skill improves over generic: **{_improves(single, generic)}**.",
+            f"3. Lattice improves over generic: **{_improves(lattice, generic)}**.",
+            f"4. Paired lattice minus generic execution difference: "
+            f"**{_format(comparison['difference'])}** "
+            f"(95% bootstrap CI {_format(comparison['ci_low'])} to "
+            f"{_format(comparison['ci_high'])}).",
             "",
             "## By task type",
             "",
@@ -166,3 +180,7 @@ def _report(summary: dict, task_summary: dict, hypothesis: str) -> str:
 
 def _format(value: float | None) -> str:
     return "n/a" if value is None else f"{value:.3f}"
+
+
+def _improves(candidate: float | None, baseline: float | None) -> str:
+    return "n/a" if candidate is None or baseline is None else str(candidate > baseline)
