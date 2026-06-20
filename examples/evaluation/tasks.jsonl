@@ -1,1 +1,0 @@
-{"id":"example-001","repo":".","revision":"HEAD","task":"Improve repository indexing error reporting.","gold_files":["src/repo_brain/indexer.py"],"gold_tests":["tests/test_indexer.py"],"validation_commands":["uv run pytest tests/test_indexer.py"],"review_rubric":["correctness","scope","maintainability"]}
