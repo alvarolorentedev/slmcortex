@@ -87,8 +87,30 @@ def _train(prepared, examples, *, force):
     metadata_path = output / "metadata.json"
     weights_path = output / "adapters.safetensors"
     if output.exists() and not force:
-        if metadata_path.exists() and weights_path.exists():
+        if metadata_path.exists():
             return json.loads(metadata_path.read_text())
+        if weights_path.exists():
+            metadata = _metadata(
+                prepared["name"],
+                examples,
+                rank=8,
+                elapsed=0.0,
+                seed=prepared["seed"],
+                iterations=prepared["iterations"],
+            )
+            metadata["config"] = {
+                **training_config(),
+                "learning_rate": prepared["learning_rate"],
+                "iterations": prepared["iterations"],
+            }
+            metadata["preservation_examples"] = (
+                sum((example.group or "").startswith("preservation_training_only:") for example in examples)
+                if prepared["preservation"]
+                else 0
+            )
+            metadata["trainable_parameters"] = _saved_parameter_count(output)
+            metadata_path.write_text(json.dumps(metadata, indent=2) + "\n")
+            return metadata
         raise FileExistsError(f"{output} exists; pass --force to replace it")
     if output.exists():
         shutil.rmtree(output)

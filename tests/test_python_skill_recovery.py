@@ -155,6 +155,40 @@ def test_train_reuses_existing_complete_output_without_force(tmp_path, monkeypat
     assert metadata["preservation_examples"] == 0
 
 
+def test_train_recovers_from_existing_weights_without_metadata(tmp_path, monkeypatch):
+    prepared = {
+        "name": "python_skill_preservation",
+        "seed": 11,
+        "learning_rate": 5e-5,
+        "iterations": 50,
+        "preservation": True,
+        "adapter_root": str(tmp_path / "adapters"),
+        "command": ["true"],
+    }
+    output = Path(prepared["adapter_root"]) / "python_skill"
+    output.mkdir(parents=True)
+    (output / "adapters.safetensors").write_bytes(b"x")
+    examples = [
+        DatasetExample(
+            id="example-1",
+            task_type="python_generation",
+            skills=["python_skill"],
+            prompt="p",
+            target="t",
+        )
+    ]
+    def fake_run(*args, **kwargs):
+        raise AssertionError("should not train")
+
+    monkeypatch.setattr("scripts.run_python_skill_recovery.subprocess.run", fake_run)
+    monkeypatch.setattr("scripts.run_python_skill_recovery._saved_parameter_count", lambda output: 0)
+
+    metadata = __import__("scripts.run_python_skill_recovery", fromlist=["_train"])._train(prepared, examples, force=False)
+
+    assert metadata["preservation_examples"] == 0
+    assert (output / "metadata.json").exists()
+
+
 def test_dry_run_writes_reports_without_changing_benchmark(tmp_path):
     benchmark = ROOT / "data/eval.jsonl"
     before = hashlib.sha256(benchmark.read_bytes()).hexdigest()
