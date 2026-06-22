@@ -10,7 +10,7 @@ from .analysis import (
 )
 from .evaluation import evaluate
 from .inference import infer
-from .schemas import MODES, SKILLS
+from .schemas import MODES, ROUTER_POLICIES, SKILLS, TASK_TYPES
 from .train_generic import train_generic
 from .train_skill import train_skill
 
@@ -36,6 +36,8 @@ def parser() -> argparse.ArgumentParser:
     inference.add_argument("--mode", choices=MODES, required=True)
     inference.add_argument("--skill", choices=SKILLS)
     inference.add_argument("--skills", nargs="+", choices=SKILLS)
+    inference.add_argument("--task-type", choices=TASK_TYPES)
+    inference.add_argument("--router-policy", choices=ROUTER_POLICIES)
     inference.add_argument("--prompt", required=True)
     inference.add_argument("--dry-run", action="store_true")
     inference.add_argument("--adapter-root")
@@ -88,6 +90,8 @@ def main(argv: list[str] | None = None) -> int:
                         arguments.prompt,
                         skill=arguments.skill,
                         skills=arguments.skills,
+                        task_type=arguments.task_type,
+                        router_policy=arguments.router_policy,
                         dry_run=arguments.dry_run,
                         adapter_root=arguments.adapter_root,
                     ).to_dict(),

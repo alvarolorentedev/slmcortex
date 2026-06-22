@@ -131,6 +131,8 @@ def compose_adapter_directories(
 
 
 @contextmanager
-def temporary_composed_adapter(paths: Sequence[Path]) -> Iterator[Path]:
+def temporary_composed_adapter(
+    paths: Sequence[Path], weights: Sequence[float] | None = None
+) -> Iterator[Path]:
     with tempfile.TemporaryDirectory(prefix="skill-lattice-adapter-") as directory:
-        yield compose_adapter_directories(paths, directory)
+        yield compose_adapter_directories(paths, directory, weights)

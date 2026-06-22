@@ -13,7 +13,7 @@ from .metrics import (
     paired_execution_comparison,
     python_syntax_valid,
 )
-from .schemas import EvaluationResult
+from .schemas import EvaluationResult, ROUTER_POLICIES
 from .utils import run_fixture, write_json
 
 PRIMARY_SKILL = {
@@ -30,8 +30,13 @@ def evaluate(
     output: str | Path | None = None,
     dry_run: bool = False,
     adapter_root: str | Path | None = None,
+    modes: tuple[str, ...] | None = None,
 ) -> Path:
     examples = load_jsonl(dataset)
+    evaluation_modes = modes or MODES
+    unknown = set(evaluation_modes) - set((*MODES, *ROUTER_POLICIES))
+    if unknown:
+        raise ValueError(f"unknown evaluation mode: {sorted(unknown)[0]}")
     output = Path(output) if output else _default_output()
     output.mkdir(parents=True, exist_ok=True)
     rows: list[dict] = []
@@ -39,17 +44,35 @@ def evaluate(
     raw_path = output / "results.jsonl"
     with raw_path.open("w") as handle:
         for index, example in enumerate(examples):
-            modes = MODES[index % len(MODES) :] + MODES[: index % len(MODES)]
-            for mode in modes:
+            ordered_modes = (
+                evaluation_modes[index % len(evaluation_modes) :]
+                + evaluation_modes[: index % len(evaluation_modes)]
+            )
+            for mode in ordered_modes:
+                inference_mode = "lattice" if mode in ROUTER_POLICIES else mode
+                composition_weights = None
+                if mode == "weighted_task_composition":
+                    composition_weights = {
+                        "debugging": [0.75, 0.25],
+                        "test_generation": [0.25, 0.75],
+                    }.get(example.task_type)
+                elif mode == "reverse_weighted_task_composition":
+                    composition_weights = {
+                        "debugging": [0.25, 0.75],
+                        "test_generation": [0.75, 0.25],
+                    }.get(example.task_type)
                 skill = (
                     PRIMARY_SKILL[example.task_type] if mode == "single-skill" else None
                 )
                 try:
                     generation = infer(
-                        mode,
+                        inference_mode,
                         example.prompt,
                         skill=skill,
                         skills=example.skills,
+                        task_type=example.task_type,
+                        router_policy=mode if mode in ROUTER_POLICIES else None,
+                        composition_weights=composition_weights,
                         dry_run=dry_run,
                         adapter_root=adapter_root,
                         model_cache=model_cache,
@@ -114,7 +137,9 @@ def evaluate(
     }
     comparison = paired_execution_comparison(rows)
     hypothesis = "inconclusive" if dry_run else classify_hypothesis(summary, comparison)
-    report = _report(summary, task_summary, comparison, hypothesis)
+    report = _report(
+        summary, task_summary, comparison, hypothesis, modes=evaluation_modes
+    )
     write_json(
         output / "summary.json",
         {
@@ -141,7 +166,12 @@ def _group_by_task(rows: list[dict]) -> dict[str, list[dict]]:
 
 
 def _report(
-    summary: dict, task_summary: dict, comparison: dict, hypothesis: str
+    summary: dict,
+    task_summary: dict,
+    comparison: dict,
+    hypothesis: str,
+    *,
+    modes: tuple[str, ...] = MODES,
 ) -> str:
     lines = [
         "# SkillLatticeCoder Evaluation",
@@ -151,7 +181,7 @@ def _report(
         "| Mode | Count | Fuzzy | Exact | Syntax | Execution | Active params |",
         "|---|---:|---:|---:|---:|---:|---:|",
     ]
-    for mode in MODES:
+    for mode in modes:
         if mode not in summary:
             continue
         value = summary[mode]

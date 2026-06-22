@@ -13,6 +13,8 @@ def test_all_cli_paths_support_dry_run(capsys, tmp_path):
                 "lattice",
                 "--prompt",
                 "Fix this Python traceback",
+                "--task-type",
+                "debugging",
                 "--dry-run",
             ]
         )

@@ -34,8 +34,9 @@ Initial skills:
 - `debugging_skill`
 - `test_generation_skill`
 
-The rule router selects at most two skills. Explicit dataset tags are supported
-for controlled tests, but normal lattice evaluation routes from prompt text.
+The default `protected_skill_router` uses frozen-base fallback for Python
+generation and validated skill pairs for debugging and test generation. The
+previous prompt-rule router remains available as `legacy_rule_router`.
 
 ## Install
 
@@ -56,7 +57,7 @@ Dry runs do not download or load a model.
 skill-lattice train-skill python_skill --dry-run
 skill-lattice train-generic --dry-run
 skill-lattice infer --mode base --prompt "Write a Python function" --dry-run
-skill-lattice infer --mode lattice --prompt "Fix this Python traceback" --dry-run
+skill-lattice infer --mode lattice --task-type debugging --prompt "Fix this Python traceback" --dry-run
 skill-lattice eval --dataset data/eval.jsonl --dry-run
 ```
 
@@ -78,12 +79,14 @@ MLX-LM trains only LoRA parameters.
 skill-lattice infer --mode base --prompt "Write a Python function"
 skill-lattice infer --mode generic --prompt "Write a Python function"
 skill-lattice infer --mode single-skill --skill debugging_skill --prompt "Fix this traceback"
-skill-lattice infer --mode lattice --prompt "Fix this Python traceback"
+skill-lattice infer --mode lattice --task-type debugging --prompt "Fix this Python traceback"
 ```
 
 Lattice composition concatenates compatible MLX LoRA ranks so that the
 resulting delta equals the weighted sum of the selected adapters. It never
 fuses adapters into the quantized base.
+
+Use `--router-policy legacy_rule_router` for the original prompt-rule behavior.
 
 ## Evaluate
 

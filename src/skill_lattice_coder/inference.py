@@ -5,8 +5,8 @@ from pathlib import Path
 from .adapter_registry import adapter_metadata, require_adapter
 from .compose import temporary_composed_adapter
 from .model_loader import generate_text, load_model
-from .router import RuleRouter
-from .schemas import GenerationResult, MODES, SKILLS
+from .router import ProtectedSkillRouter, RuleRouter
+from .schemas import GenerationResult, MODES, ROUTER_POLICIES, SKILLS
 
 
 def infer(
@@ -15,6 +15,9 @@ def infer(
     *,
     skill: str | None = None,
     skills: list[str] | None = None,
+    task_type: str | None = None,
+    router_policy: str | None = None,
+    composition_weights: list[float] | None = None,
     dry_run: bool = False,
     adapter_root: str | Path | None = None,
     model_cache: dict | None = None,
@@ -30,7 +33,20 @@ def infer(
             raise ValueError("--skill is required for single-skill mode")
         selected, adapter_names = [skill], [skill]
     elif mode == "lattice":
-        route = RuleRouter().route(prompt)
+        if router_policy == "legacy_rule_router":
+            route = RuleRouter().route(prompt)
+        elif router_policy in (
+            None,
+            "python_only_for_test_generation",
+            "protected_skill_router",
+            "weighted_task_composition",
+            "reverse_weighted_task_composition",
+        ):
+            route = ProtectedSkillRouter().route(task_type)
+        else:
+            raise ValueError(
+                f"unknown router_policy: {router_policy}; expected {ROUTER_POLICIES}"
+            )
         selected = route.selected_skills
         adapter_names = selected
     elif mode == "oracle-lattice":
@@ -55,7 +71,11 @@ def infer(
             active_adapter_parameters=parameters,
         )
 
-    cache_key = tuple(adapter_names)
+    cache_key = (
+        (tuple(adapter_names), tuple(composition_weights))
+        if composition_weights
+        else tuple(adapter_names)
+    )
     cached = model_cache.get(cache_key) if model_cache is not None else None
     try:
         import mlx.core as mx
@@ -69,7 +89,11 @@ def infer(
     else:
         paths = [require_adapter(name, adapter_root) for name in adapter_names]
         adapter_context = (
-            temporary_composed_adapter(paths)
+            (
+                temporary_composed_adapter(paths, composition_weights)
+                if composition_weights
+                else temporary_composed_adapter(paths)
+            )
             if len(paths) > 1
             else nullcontext(paths[0] if paths else None)
         )

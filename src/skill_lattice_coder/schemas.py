@@ -3,6 +3,13 @@ from typing import Any
 
 SKILLS = ("python_skill", "debugging_skill", "test_generation_skill")
 MODES = ("base", "generic", "single-skill", "lattice", "oracle-lattice")
+ROUTER_POLICIES = (
+    "python_only_for_test_generation",
+    "protected_skill_router",
+    "legacy_rule_router",
+    "weighted_task_composition",
+    "reverse_weighted_task_composition",
+)
 TASK_TYPES = ("python_generation", "debugging", "test_generation")
 
 
@@ -145,7 +152,7 @@ class EvaluationResult:
         _nonempty("example_id", self.example_id)
         if self.task_type not in TASK_TYPES:
             raise ValueError(f"unknown task_type: {self.task_type}")
-        if self.mode not in MODES:
+        if self.mode not in (*MODES, *ROUTER_POLICIES):
             raise ValueError(f"unknown mode: {self.mode}")
         if not 0 <= self.fuzzy_score <= 1:
             raise ValueError("fuzzy_score must be between 0 and 1")

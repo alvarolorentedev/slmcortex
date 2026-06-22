@@ -60,3 +60,60 @@ def test_evaluation_scores_extracted_code(monkeypatch, tmp_path):
     assert all(row["generation"] == "def answer():\n    return 42" for row in rows)
     assert all(row["exact_match"] for row in rows)
     assert all(row["execution_passed"] for row in rows)
+
+
+def test_evaluation_runs_opt_in_router_policy_without_changing_default(monkeypatch, tmp_path):
+    calls = []
+    monkeypatch.setattr(
+        evaluation,
+        "infer",
+        lambda mode, prompt, **kwargs: calls.append((mode, kwargs)) or GenerationResult(
+            mode=mode,
+            generation="[dry-run generation]",
+        ),
+    )
+
+    evaluate(
+        "data/eval.jsonl",
+        output=tmp_path,
+        dry_run=True,
+        modes=("base", "lattice", "oracle-lattice", "python_only_for_test_generation"),
+    )
+
+    assert {row[0] for row in calls} == {"base", "lattice", "oracle-lattice"}
+    policy_calls = [
+        kwargs for mode, kwargs in calls
+        if kwargs.get("router_policy") == "python_only_for_test_generation"
+    ]
+    assert len(policy_calls) == 150
+    assert {call["task_type"] for call in policy_calls} == {
+        "python_generation",
+        "debugging",
+        "test_generation",
+    }
+
+
+def test_evaluation_can_apply_task_composition_weights(monkeypatch, tmp_path):
+    calls = []
+    monkeypatch.setattr(
+        evaluation,
+        "infer",
+        lambda mode, prompt, **kwargs: calls.append(kwargs) or GenerationResult(
+            mode=mode,
+            generation="[dry-run generation]",
+        ),
+    )
+
+    evaluate(
+        "data/eval.jsonl",
+        output=tmp_path,
+        dry_run=True,
+        modes=("weighted_task_composition",),
+    )
+
+    by_task = {call["task_type"]: call["composition_weights"] for call in calls}
+    assert by_task == {
+        "python_generation": None,
+        "debugging": [0.75, 0.25],
+        "test_generation": [0.25, 0.75],
+    }

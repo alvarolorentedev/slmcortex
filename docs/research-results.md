@@ -2,6 +2,31 @@
 
 ## Executive conclusion
 
+Fresh five-seed inference validates `protected_skill_router` as the new default:
+
+- Protected router execution pass rate: **52.93%**
+- Python generation: **54.0%**, equal to the frozen base
+- Debugging: **46.4%**, equal to the previous routed lattice
+- Test generation: **58.4%**, equal to the oracle lattice
+- Improvement over the previous router: **+7.33 percentage points**
+
+The concrete implementation remains available as
+`python_only_for_test_generation`; the previous prompt-rule behavior remains
+available explicitly as `legacy_rule_router`.
+
+### Validated Mechanism 1: Protective Gating / Base Fallback
+
+A sparse skill lattice must not always activate a skill for a matching task
+domain. If the frozen base model is stronger than the adapted skill route, the
+router should select base fallback. This prevents harmful plasticity and allows
+the system to improve without damaging stable capabilities.
+
+The validation used fresh inference rather than counterfactual recombination:
+`fresh_inference=true`, `counterfactual_recombination=false`,
+`requires_training=false`, and `training_invoked=false`.
+
+## Original five-seed lattice result
+
 The five-seed experiment provides statistically significant evidence that the
 routed skill lattice outperforms the compute-matched generic LoRA baseline.
 
@@ -132,13 +157,12 @@ two to eight points.
 
 ## Next experiments
 
-1. Improve routing, using the oracle result as the target; do not add more
-   skills yet.
-2. Diagnose the Python-generation regression and compare training mixtures or
-   lower skill learning rates.
-3. Evaluate composition weights instead of fixed equal weighting.
-4. Repeat the same protocol on a non-synthetic external Python benchmark.
-5. Preserve the current benchmark and thresholds as a fixed regression suite.
+1. Evaluate equal, strongest-skill, protected-pair, harmful-pair blocking, and
+   deterministic weighted composition using the existing adapters.
+2. If composition does not improve the protected router, move to failure-born
+   skill creation.
+3. Do not add or retrain skills before composition control is resolved.
+4. Preserve the current benchmark and thresholds as a fixed regression suite.
 
 ## Reproduction and artifacts
 

@@ -1,6 +1,6 @@
 from collections import Counter
 
-from .schemas import RouteDecision, SKILLS
+from .schemas import RouteDecision, SKILLS, TASK_TYPES
 
 RULES = {
     "debugging_skill": ("traceback", "error", "exception", "failing", "fix", "bug"),
@@ -53,3 +53,25 @@ class RuleRouter:
         confidence = min(0.95, 0.55 + 0.1 * total)
         markers = ", ".join(f"{skill}={scores[skill]}" for skill in selected)
         return RouteDecision(selected, confidence, f"Matched prompt rules: {markers}.")
+
+
+class PythonOnlyForTestGenerationRouter:
+    def route(self, task_type: str) -> RouteDecision:
+        if task_type not in TASK_TYPES:
+            raise ValueError(f"unknown task_type: {task_type}")
+        if task_type == "python_generation":
+            return RouteDecision(
+                [],
+                1.0,
+                "Pure Python generation uses the frozen base model.",
+                route_type="base_fallback",
+            )
+        selected = (
+            ["debugging_skill", "python_skill"]
+            if task_type == "debugging"
+            else ["python_skill", "test_generation_skill"]
+        )
+        return RouteDecision(selected, 1.0, f"Protected route for {task_type}.")
+
+
+ProtectedSkillRouter = PythonOnlyForTestGenerationRouter
