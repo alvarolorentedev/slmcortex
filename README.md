@@ -33,10 +33,14 @@ Initial skills:
 - `python_skill`
 - `debugging_skill`
 - `test_generation_skill`
+- `alternating_skill` (promoted behind a strict semantic gate)
 
-The default `protected_skill_router` uses frozen-base fallback for Python
-generation and validated skill pairs for debugging and test generation. The
-previous prompt-rule router remains available as `legacy_rule_router`.
+The default `skillcortex_router_v1` uses frozen-base fallback for Python
+generation, validated skill pairs for debugging and test generation, and
+activates `alternating_skill` only for the `alternating` semantic family's
+debugging and test-generation tasks. The pre-promotion baseline remains
+available as `protected_skill_router_without_failure_born`; the previous
+prompt-rule router remains available as `legacy_rule_router`.
 
 ## Install
 
@@ -87,6 +91,8 @@ resulting delta equals the weighted sum of the selected adapters. It never
 fuses adapters into the quantized base.
 
 Use `--router-policy legacy_rule_router` for the original prompt-rule behavior.
+Use `--router-policy protected_skill_router_without_failure_born` for the
+validated pre-promotion baseline.
 
 ## Evaluate
 

@@ -1,5 +1,11 @@
 # SkillLatticeCoder Phase 1 Research Results
 
+## Research phase status
+
+- Phase 1: **complete**
+- Phase 1.5: **complete**
+- Phase 2.1: **complete**
+
 ## Executive conclusion
 
 Fresh five-seed inference validates `protected_skill_router` as the new default:
@@ -16,14 +22,29 @@ available explicitly as `legacy_rule_router`.
 
 ### Validated Mechanism 1: Protective Gating / Base Fallback
 
-A sparse skill lattice must not always activate a skill for a matching task
-domain. If the frozen base model is stronger than the adapted skill route, the
-router should select base fallback. This prevents harmful plasticity and allows
-the system to improve without damaging stable capabilities.
+The system protects stable base-model capabilities by routing pure Python
+generation to the frozen base instead of activating harmful broad Python
+adapters.
 
 The validation used fresh inference rather than counterfactual recombination:
 `fresh_inference=true`, `counterfactual_recombination=false`,
 `requires_training=false`, and `training_invoked=false`.
+
+### Validated Mechanism 2: Failure-Born Skill Neurogenesis
+
+The system can create a new quarantined skill from a repeated failure cluster,
+validate it on independent holdout data, and recommend promotion only when it
+improves the target without non-target regression.
+
+- Protected router: **52.9%**
+- SkillCortex Router V1: **53.6%**
+- Fixed target: **0.0% → 50.0%**
+- Holdout target: **74.0% → 99.3%**
+- Non-target regressions: **0**
+
+`alternating_skill` is the first promoted failure-born skill. Its historical
+experiment remains quarantined and non-auto-promoting; production research
+activation is limited to the explicit `skillcortex_router_v1` semantic gate.
 
 ## Original five-seed lattice result
 

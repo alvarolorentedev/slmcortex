@@ -5,7 +5,12 @@ from pathlib import Path
 from .adapter_registry import adapter_metadata, require_adapter
 from .compose import temporary_composed_adapter
 from .model_loader import generate_text, load_model
-from .router import ProtectedSkillRouter, RuleRouter
+from .router import (
+    ProtectedRouterPlusAlternatingSkill,
+    ProtectedSkillRouter,
+    RuleRouter,
+    SkillCortexRouterV1,
+)
 from .schemas import GenerationResult, MODES, ROUTER_POLICIES, SKILLS
 
 
@@ -16,6 +21,7 @@ def infer(
     skill: str | None = None,
     skills: list[str] | None = None,
     task_type: str | None = None,
+    semantic_family: str | None = None,
     router_policy: str | None = None,
     composition_weights: list[float] | None = None,
     dry_run: bool = False,
@@ -37,8 +43,17 @@ def infer(
             route = RuleRouter().route(prompt)
         elif router_policy in (
             None,
+            "skillcortex_router_v1",
+        ):
+            route = SkillCortexRouterV1().route(task_type, semantic_family)
+        elif router_policy == "protected_router_plus_alternating_skill":
+            route = ProtectedRouterPlusAlternatingSkill().route(
+                task_type, semantic_family
+            )
+        elif router_policy in (
             "python_only_for_test_generation",
             "protected_skill_router",
+            "protected_skill_router_without_failure_born",
             "weighted_task_composition",
             "reverse_weighted_task_composition",
         ):
@@ -57,6 +72,12 @@ def infer(
     else:
         adapter_names = []
 
+    if len(adapter_names) == 3 and router_policy not in (
+        None,
+        "skillcortex_router_v1",
+        "protected_router_plus_alternating_skill",
+    ):
+        raise ValueError("three-adapter composition is quarantined to alternating_skill")
     parameters = sum(
         int(adapter_metadata(name, adapter_root).get("trainable_parameters") or 0)
         for name in adapter_names

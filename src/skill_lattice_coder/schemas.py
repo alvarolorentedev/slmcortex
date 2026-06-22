@@ -2,13 +2,19 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 SKILLS = ("python_skill", "debugging_skill", "test_generation_skill")
+PROMOTED_SKILLS = ("alternating_skill",)
+QUARANTINED_SKILLS = ()
+KNOWN_SKILLS = (*SKILLS, *PROMOTED_SKILLS, *QUARANTINED_SKILLS)
 MODES = ("base", "generic", "single-skill", "lattice", "oracle-lattice")
 ROUTER_POLICIES = (
     "python_only_for_test_generation",
     "protected_skill_router",
+    "protected_skill_router_without_failure_born",
+    "skillcortex_router_v1",
     "legacy_rule_router",
     "weighted_task_composition",
     "reverse_weighted_task_composition",
+    "protected_router_plus_alternating_skill",
 )
 TASK_TYPES = ("python_generation", "debugging", "test_generation")
 
@@ -25,7 +31,7 @@ def _valid_skills(skills: list[str]) -> None:
 
 
 def _known_skills(skills: list[str]) -> None:
-    unknown = set(skills) - set(SKILLS)
+    unknown = set(skills) - set(KNOWN_SKILLS)
     if unknown:
         raise ValueError(f"unknown skill: {sorted(unknown)[0]}")
 
@@ -63,6 +69,7 @@ class DatasetExample:
     target: str
     execution: ExecutionFixture | None = None
     group: str | None = None
+    metadata: dict[str, Any] | None = None
 
     def __post_init__(self) -> None:
         _nonempty("id", self.id)
@@ -73,6 +80,8 @@ class DatasetExample:
         _valid_skills(self.skills)
         if isinstance(self.execution, dict):
             self.execution = ExecutionFixture.from_dict(self.execution)
+        if self.metadata is not None and not isinstance(self.metadata, dict):
+            raise ValueError("metadata must be a mapping")
 
     @classmethod
     def from_dict(cls, value: dict[str, Any]) -> "DatasetExample":
@@ -91,8 +100,8 @@ class RouteDecision:
 
     def __post_init__(self) -> None:
         _known_skills(self.selected_skills)
-        if len(self.selected_skills) > 2:
-            raise ValueError("at most two skills may be selected")
+        if len(self.selected_skills) > 3:
+            raise ValueError("at most three skills may be selected")
         if not 0 <= self.confidence <= 1:
             raise ValueError("confidence must be between 0 and 1")
         _nonempty("reason", self.reason)

@@ -71,6 +71,7 @@ def evaluate(
                         skill=skill,
                         skills=example.skills,
                         task_type=example.task_type,
+                        semantic_family=example.group,
                         router_policy=mode if mode in ROUTER_POLICIES else None,
                         composition_weights=composition_weights,
                         dry_run=dry_run,

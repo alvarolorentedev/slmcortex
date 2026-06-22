@@ -75,3 +75,41 @@ class PythonOnlyForTestGenerationRouter:
 
 
 ProtectedSkillRouter = PythonOnlyForTestGenerationRouter
+ProtectedSkillRouterWithoutFailureBorn = PythonOnlyForTestGenerationRouter
+
+
+class SkillCortexRouterV1:
+    def route(self, task_type: str, semantic_family: str | None) -> RouteDecision:
+        protected = ProtectedSkillRouterWithoutFailureBorn().route(task_type)
+        if semantic_family != "alternating" or task_type == "python_generation":
+            return protected
+        selected = (
+            ["debugging_skill", "python_skill", "alternating_skill"]
+            if task_type == "debugging"
+            else ["python_skill", "test_generation_skill", "alternating_skill"]
+        )
+        return RouteDecision(
+            selected,
+            1.0,
+            "Promoted alternating route.",
+        )
+
+
+class ProtectedRouterPlusAlternatingSkill:
+    quarantined = True
+
+    def route(self, task_type: str, semantic_family: str | None) -> RouteDecision:
+        protected = ProtectedSkillRouter().route(task_type)
+        if semantic_family != "alternating" or task_type == "python_generation":
+            return protected
+        selected = (
+            ["debugging_skill", "python_skill", "alternating_skill"]
+            if task_type == "debugging"
+            else ["python_skill", "test_generation_skill", "alternating_skill"]
+        )
+        return RouteDecision(
+            selected,
+            1.0,
+            "Quarantined alternating candidate route.",
+            route_type="quarantined_candidate",
+        )

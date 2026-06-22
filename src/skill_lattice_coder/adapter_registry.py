@@ -2,11 +2,11 @@ import json
 from pathlib import Path
 
 from .config import ARTIFACT_DIR
-from .schemas import SKILLS
+from .schemas import KNOWN_SKILLS
 
 
 def adapter_path(name: str, root: str | Path | None = None) -> Path:
-    if name != "generic" and name not in SKILLS:
+    if name != "generic" and name not in KNOWN_SKILLS:
         raise ValueError(f"unknown adapter: {name}")
     return Path(root) / name if root else ARTIFACT_DIR / "adapters" / name
 

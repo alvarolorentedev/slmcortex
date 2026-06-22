@@ -1,8 +1,10 @@
 from skill_lattice_coder.schemas import RouteDecision
 from skill_lattice_coder.router import (
+    ProtectedSkillRouterWithoutFailureBorn,
     ProtectedSkillRouter,
     PythonOnlyForTestGenerationRouter,
     RuleRouter,
+    SkillCortexRouterV1,
 )
 
 
@@ -60,3 +62,25 @@ def test_python_only_for_test_generation_routes_exactly_by_task():
 
 def test_protected_skill_router_is_the_architectural_alias():
     assert ProtectedSkillRouter is PythonOnlyForTestGenerationRouter
+
+
+def test_skillcortex_router_v1_gates_promoted_alternating_skill():
+    router = SkillCortexRouterV1()
+
+    assert router.route("debugging", "alternating").selected_skills == [
+        "debugging_skill",
+        "python_skill",
+        "alternating_skill",
+    ]
+    assert router.route("test_generation", "alternating").selected_skills == [
+        "python_skill",
+        "test_generation_skill",
+        "alternating_skill",
+    ]
+    assert router.route("python_generation", "alternating").selected_skills == []
+    assert router.route("debugging", "overlay") == ProtectedSkillRouterWithoutFailureBorn().route("debugging")
+    assert router.route("test_generation", None) == ProtectedSkillRouterWithoutFailureBorn().route("test_generation")
+
+
+def test_protected_router_without_failure_born_remains_the_validated_baseline():
+    assert ProtectedSkillRouterWithoutFailureBorn is PythonOnlyForTestGenerationRouter

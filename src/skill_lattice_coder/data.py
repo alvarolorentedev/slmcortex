@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 from typing import Iterable
 
-from .schemas import DatasetExample, SKILLS
+from .schemas import DatasetExample, KNOWN_SKILLS
 
 
 def load_jsonl(path: str | Path) -> list[DatasetExample]:
@@ -29,7 +29,7 @@ def load_jsonl(path: str | Path) -> list[DatasetExample]:
 def select_for_skill(
     examples: Iterable[DatasetExample], skill: str
 ) -> list[DatasetExample]:
-    if skill not in SKILLS:
+    if skill not in KNOWN_SKILLS:
         raise ValueError(f"unknown skill: {skill}")
     return [example for example in examples if skill in example.skills]
 
