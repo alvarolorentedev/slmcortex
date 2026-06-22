@@ -80,14 +80,16 @@ class RouteDecision:
     selected_skills: list[str]
     confidence: float
     reason: str
+    route_type: str = "adapter"
 
     def __post_init__(self) -> None:
-        _valid_skills(self.selected_skills)
+        _known_skills(self.selected_skills)
         if len(self.selected_skills) > 2:
             raise ValueError("at most two skills may be selected")
         if not 0 <= self.confidence <= 1:
             raise ValueError("confidence must be between 0 and 1")
         _nonempty("reason", self.reason)
+        _nonempty("route_type", self.route_type)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

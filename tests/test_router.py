@@ -1,3 +1,4 @@
+from skill_lattice_coder.schemas import RouteDecision
 from skill_lattice_coder.router import RuleRouter
 
 
@@ -26,3 +27,14 @@ def test_explicit_dataset_tags_override_prompt_rules():
     )
     assert decision.selected_skills == ["debugging_skill", "python_skill"]
     assert "tags" in decision.reason.lower()
+
+
+def test_base_fallback_route_is_valid():
+    decision = RouteDecision(
+        [],
+        1.0,
+        "Base is stronger.",
+        route_type="base_fallback",
+    )
+    assert decision.selected_skills == []
+    assert decision.route_type == "base_fallback"
