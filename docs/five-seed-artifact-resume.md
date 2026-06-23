@@ -47,3 +47,8 @@ generic LoRA baseline.
 - Benchmark size: `750` executions per mode
 - Benchmark families: `50`
 - Models: `Qwen/Qwen2.5-Coder-1.5B-Instruct` and `mlx-community/Qwen2.5-Coder-1.5B-Instruct-4bit`
+
+## Related artifacts
+
+- FastAPI contract baseline: `artifacts/experiments/fastapi-contract-baseline/summary.md` records per-behavior diagnostics and latency comparisons for `skillcortex_router_v1`.
+- Recent evaluation: `artifacts/evaluations/20260620T152056Z/report.md` contains a diagnostic report labeling its hypothesis inconclusive and reporting per-mode metrics.

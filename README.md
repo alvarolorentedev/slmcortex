@@ -154,6 +154,11 @@ yet support a claim of general coding improvement.
 See [the complete Phase 1 results](docs/research-results.md) for methodology,
 per-task and per-seed tables, limitations, and reproduction details.
 
+### Recent artifact outcomes
+
+- FastAPI contract baseline: see `artifacts/experiments/fastapi-contract-baseline/summary.md` for per-behavior fuzzy scores, mean latency, and active-parameter counts. The candidate `skillcortex_router_v1` uses 466,944 active adapter parameters; per-behavior summaries and latency comparisons are recorded in `summary.json`.
+- Evaluation report (2026-06-20): see `artifacts/evaluations/20260620T152056Z/report.md`. The evaluation labels its hypothesis inconclusive and reports per-mode fuzzy/exact/syntax/execution diagnostics; parameter-efficiency details are available in the corresponding `summary.json` files under `artifacts/`.
+
 Execution fixtures are for trusted local toy data only. They are isolated in a
 temporary directory with a timeout, but they are not a security sandbox.
 

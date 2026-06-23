@@ -213,3 +213,8 @@ Key local artifacts:
 The artifacts directory is intentionally gitignored because it contains model
 weights and large generated results. This document records the stable aggregate
 results in version control.
+
+## Additional artifacts
+
+- FastAPI contract baseline: `artifacts/experiments/fastapi-contract-baseline/summary.md` and `summary.json` contain per-behavior fuzzy scores, mean latency, and active-parameter counts for `skillcortex_router_v1` (466,944 active parameters). The experiment provides behavior-group diagnostics and latency comparisons useful for router tuning.
+- Evaluation report (2026-06-20): `artifacts/evaluations/20260620T152056Z/report.md` summarizes per-mode fuzzy/exact/syntax/execution diagnostics and flags the overall hypothesis as inconclusive; consult the linked `summary.json` files for parameter-efficiency numbers.
