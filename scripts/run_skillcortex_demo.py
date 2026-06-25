@@ -45,17 +45,44 @@ def _copy_demo_repo(destination: Path) -> Path:
 
 
 def _stage_demo_adapter(skill_id: str, destination: Path) -> Path:
-    source = ROOT / "artifacts" / "adapters" / skill_id
     destination.mkdir(parents=True, exist_ok=True)
 
-    shutil.copy2(source / "adapter_config.json", destination / "adapter_config.json")
-    if (source / "metadata.json").exists():
-        shutil.copy2(source / "metadata.json", destination / "metadata.json")
-
-    weights_source = source / "adapters.safetensors"
-    if not weights_source.exists():
-        weights_source = source / "0000100_adapters.safetensors"
-    shutil.copy2(weights_source, destination / "adapters.safetensors")
+    (destination / "adapter_config.json").write_text(
+        json.dumps(
+            {
+                "fine_tune_type": "lora",
+                "num_layers": 1,
+                "lora_parameters": {
+                    "rank": 1,
+                    "scale": 1.0,
+                    "dropout": 0.0,
+                    "keys": ["self_attn.q_proj"],
+                },
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n"
+    )
+    (destination / "metadata.json").write_text(
+        json.dumps(
+            {
+                "source_model": "demo-source-model",
+                "base_model": "demo-runtime-model",
+                "quantization": "4bit",
+                "config": {},
+                "dataset_size": 1,
+                "elapsed_seconds": 0.0,
+                "rank": 1,
+                "target_modules": ["self_attn.q_proj"],
+                "trainable_parameters": 1,
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n"
+    )
+    (destination / "adapters.safetensors").write_bytes(b"demo")
     return destination
 
 
