@@ -1,55 +1,151 @@
-# Skill Cortex v0.1
+# Skill Cortex
 
-Skill Cortex is the package-first product surface in this repository. It turns
-checked-in LoRA adapters into validated skill packages, composes those packages
-into a runtime bundle, runs local inference against that bundle, and exposes a
-bounded local agent on top of the same runtime core.
+[![Pytest](https://github.com/alvarolorentedev/crazy-coding-llm/actions/workflows/pytest.yml/badge.svg)](https://github.com/alvarolorentedev/crazy-coding-llm/actions/workflows/pytest.yml)
+[![Demo Validation](https://github.com/alvarolorentedev/crazy-coding-llm/actions/workflows/demo.yml/badge.svg)](https://github.com/alvarolorentedev/crazy-coding-llm/actions/workflows/demo.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](pyproject.toml)
 
-The repository still contains the underlying `skill-lattice` research workflow.
-Skill Cortex does not replace that research surface; it hardens the packaging,
-composition, runtime, and agent flow into a coherent demoable product.
+Skill Cortex is a package manager and runtime for AI coding capabilities.
 
-## Product Architecture
+Instead of shipping one larger fine-tune, Skill Cortex packages specialized LoRA
+skills as self-describing artifacts, composes those artifacts into deterministic
+runtime bundles, and runs local coding workflows on top of the same runtime
+core.
 
-Skill Cortex v0.1 has four product layers:
+The package is the unit of distribution.
+The runtime bundle is the unit of deployment.
+The runtime is the unit of execution.
 
-- Skill Factory: packages an adapter plus provenance into a self-describing
-  skill artifact. See [docs/architecture/skill-factory.md](docs/architecture/skill-factory.md).
-- Skill Composer: composes validated packages into a deterministic runtime
-  bundle. See [docs/architecture/skill-composer.md](docs/architecture/skill-composer.md).
-- Runtime Core: validates a runtime bundle, routes requests, and serves local
-  inference. See [docs/architecture/runtime-core.md](docs/architecture/runtime-core.md).
-- Agent Runtime: runs a bounded local repo task loop on top of Runtime Core.
-  See [docs/architecture/agent-runtime.md](docs/architecture/agent-runtime.md).
+## Why Skill Cortex?
 
-The package contract, runtime bundle contents, and provenance guarantees are
-documented in [docs/skill-package-contract.md](docs/skill-package-contract.md).
+Most coding-agent stacks treat model adaptation, deployment, and agent behavior
+as one opaque system. Skill Cortex separates those concerns:
+
+- package a capability once as a reusable skill artifact
+- compose multiple skills into one runtime bundle without mutating source assets
+- validate the bundle before inference or serving
+- run a bounded local agent against the same runtime the CLI and server use
+
+This repository keeps the original research workflow, but the canonical public
+product surface is `skillcortex`.
+
+## Product Overview
+
+Skill Cortex v0.1 ships one narrow but complete path from checked-in adapters to
+an executable local agent workflow:
+
+```mermaid
+flowchart TD
+    A[Skill Factory] --> B[Skill Package]
+    B --> C[Skill Composer]
+    C --> D[Runtime Bundle]
+    D --> E[Runtime Core]
+    E --> F[Agent Runtime]
+```
+
+### Product layers
+
+- Skill Factory: package an adapter plus provenance into a validated skill
+  artifact
+- Skill Composer: combine validated skill packages into a deterministic runtime
+  bundle
+- Runtime Core: validate, route, infer, and serve from a runtime bundle
+- Agent Runtime: run a bounded local repository task loop on top of Runtime Core
+
+Deep-dive docs:
+
+- [Skill Factory](docs/architecture/skill-factory.md)
+- [Skill Composer](docs/architecture/skill-composer.md)
+- [Runtime Core](docs/architecture/runtime-core.md)
+- [Agent Runtime](docs/architecture/agent-runtime.md)
+- [Skill Package Contract](docs/skill-package-contract.md)
+- [Repo Boundary Map](docs/repo-boundary-map.md)
+
+## Support Matrix
+
+| Scenario | Status | Notes |
+| --- | --- | --- |
+| Package, compose, validate, and no-model demo | Supported | Documented for macOS with Python 3.11+ |
+| Real runtime inference | Supported with constraints | Requires model-compatible local environment; current research path is Apple Silicon-first because of `mlx-lm` |
+| Compatibility server | Supported | Minimal, non-streaming OpenAI-compatible surface |
+| Bounded local agent | Supported | Local single-run workflow only |
+| Linux and Windows | Not yet documented | Treat as experimental until verified and documented |
 
 ## Install
 
-Requires Python 3.11+.
+### Recommended local setup
 
 ```bash
 python3 -m venv .venv
 . .venv/bin/activate
+pip install --upgrade pip
 pip install -e '.[test]'
 ```
 
-Check the product CLI surface:
+Check the canonical public CLI:
 
 ```bash
 python -m skillcortex --help
 ```
 
-## End-To-End Quickstart
+### Platform guidance
 
-This quickstart uses tiny checked-in fixtures and dry-run runtime steps, so it
-does not retrain models and does not download model weights.
+- Python 3.11+ is required
+- The documented no-model demo avoids model downloads and weight loading
+- Real model execution currently follows the repository's Apple Silicon-first
+  `mlx-lm` research environment
+
+## Quickstart: No-Model Demo
+
+A first-time developer should start here. This flow uses checked-in fixtures,
+checked-in adapter artifacts, and dry-run runtime/agent steps.
 
 ```bash
 DEMO_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/skillcortex-demo.XXXXXX")"
-cp -R tests/fixtures/skillcortex_demo/toy-repo "$DEMO_ROOT/toy-repo"
+python scripts/run_skillcortex_demo.py --output-root "$DEMO_ROOT"
+```
 
+What the demo validates:
+
+- packaging existing adapters into self-describing skill packages
+- composing those packages into one runtime bundle
+- validating the runtime bundle before execution
+- dry-run routing for inference without loading a model
+- bounded agent control flow against a local repository
+
+Expected outputs under `$DEMO_ROOT`:
+
+```text
+python_skill/
+debugging_skill/
+runtime/
+agent-trace.json
+```
+
+For the command-by-command version of the same flow, see [examples/README.md](examples/README.md).
+
+## CLI Overview
+
+Skill Cortex ships one public CLI with command-specific help and examples.
+
+| Command | Purpose |
+| --- | --- |
+| `skillcortex train-skill` | train one built-in research skill and package it as a Skill Cortex artifact |
+| `skillcortex package-skill` | package an existing adapter into a self-describing skill artifact |
+| `skillcortex validate-skill-package` | verify package structure, fingerprints, and protected inputs |
+| `skillcortex compose-skills` | compose validated skill packages into a deterministic runtime bundle |
+| `skillcortex validate-runtime` | verify a runtime bundle before inference or serving |
+| `skillcortex infer` | run local inference or dry-run routing against a runtime bundle |
+| `skillcortex serve` | expose the minimal OpenAI-compatible compatibility server |
+| `skillcortex agent run` | run the bounded local agent workflow against a local repository |
+
+Use `skillcortex <command> --help` for command-specific examples.
+
+## Common Workflows
+
+### Create a skill package
+
+```bash
 skillcortex package-skill \
   --skill-id python_skill \
   --name "Python Skill" \
@@ -57,419 +153,70 @@ skillcortex package-skill \
   --train-dataset tests/fixtures/skillcortex_demo/train.jsonl \
   --eval-dataset tests/fixtures/skillcortex_demo/eval.jsonl \
   --eval-summary tests/fixtures/skillcortex_demo/eval-summary.json \
-  --output "$DEMO_ROOT/python_skill"
-
-skillcortex package-skill \
-  --skill-id debugging_skill \
-  --name "Debugging Skill" \
-  --adapter-dir artifacts/adapters/debugging_skill \
-  --train-dataset tests/fixtures/skillcortex_demo/train.jsonl \
-  --eval-dataset tests/fixtures/skillcortex_demo/eval.jsonl \
-  --eval-summary tests/fixtures/skillcortex_demo/eval-summary.json \
-  --output "$DEMO_ROOT/debugging_skill"
-
-skillcortex compose-skills \
-  --skills "$DEMO_ROOT/python_skill,$DEMO_ROOT/debugging_skill" \
-  --strategy routed \
-  --output "$DEMO_ROOT/runtime"
-
-skillcortex validate-runtime --runtime "$DEMO_ROOT/runtime"
-
-skillcortex infer \
-  --runtime "$DEMO_ROOT/runtime" \
-  --request-file tests/fixtures/skillcortex_demo/request.json \
-  --dry-run
-
-skillcortex agent run \
-  --runtime "$DEMO_ROOT/runtime" \
-  --repo "$DEMO_ROOT/toy-repo" \
-  --task "Fix the failing answer implementation." \
-  --dry-run \
-  --trace-out "$DEMO_ROOT/agent-trace.json"
+  --output /tmp/skillcortex-demo/python_skill
 ```
 
-What this proves:
-
-- Skill Factory can package existing adapters without mutating checked-in
-  artifacts.
-- Skill Composer can emit a runtime bundle from those packages.
-- Runtime Core can validate and route an inference request without loading a
-  model.
-- Agent Runtime can execute its bounded control flow against a local repo and
-  write a trace.
-
-## Scripted No-Model Demo
-
-The scripted path runs the same flow as the quickstart and writes all output to
-a temp or user-provided directory.
+### Compose multiple skills into a runtime bundle
 
 ```bash
-python scripts/run_skillcortex_demo.py --output-root "$DEMO_ROOT/scripted"
+skillcortex compose-skills \
+  --skills /tmp/skillcortex-demo/python_skill,/tmp/skillcortex-demo/debugging_skill \
+  --strategy routed \
+  --output /tmp/skillcortex-demo/runtime
 ```
 
-The script emits JSON with the output paths and each completed step. It uses
-only:
+### Validate and dry-run the runtime
 
-- checked-in adapter artifacts under `artifacts/adapters/`
-- tiny fixtures under `tests/fixtures/skillcortex_demo/`
-- temp output directories under the selected demo root
+```bash
+skillcortex validate-runtime --runtime /tmp/skillcortex-demo/runtime
 
-## CLI Commands
+skillcortex infer \
+  --runtime /tmp/skillcortex-demo/runtime \
+  --request-file tests/fixtures/skillcortex_demo/request.json \
+  --dry-run
+```
 
-Every product command now ships with command-specific `--help` examples.
+### Serve a runtime bundle
 
-- `skillcortex train-skill`: train one built-in research skill and package it as
-  a Skill Cortex artifact
-- `skillcortex package-skill`: package an existing adapter into a self-describing
-  skill artifact
-- `skillcortex validate-skill-package`: verify package structure, fingerprints,
-  and protected inputs
-- `skillcortex compose-skills`: compose validated skill packages into a runtime
-  bundle
-- `skillcortex validate-runtime`: verify a runtime bundle before inference or
-  serving
-- `skillcortex infer`: run local inference or dry-run routing against a runtime
-  bundle
-- `skillcortex serve`: expose the minimal OpenAI-compatible compatibility server
-- `skillcortex agent run`: execute the bounded local agent loop against a repo
+```bash
+skillcortex serve --runtime /tmp/skillcortex-demo/runtime --host 127.0.0.1 --port 8000
+```
 
-Use `python -m skillcortex <command> --help` or `skillcortex <command> --help`
-for the full examples on each command.
+### Run the bounded local agent
+
+```bash
+skillcortex agent run \
+  --runtime /tmp/skillcortex-demo/runtime \
+  --repo /tmp/skillcortex-demo/toy-repo \
+  --task "Fix the failing answer implementation." \
+  --dry-run \
+  --trace-out /tmp/skillcortex-demo/agent-trace.json
+```
 
 ## v0.1 Limitations
 
 Skill Cortex v0.1 is intentionally narrow.
 
-- It does not retrain models as part of the documented demo flow.
-- It does not add any marketplace, publishing, or discovery layer.
-- It preserves the package-first architecture; runtime bundles remain the source
-  of truth at runtime.
-- Registry enrichment is optional provenance only and is never mandatory for a
-  self-describing package.
-- `compose-skills` currently supports only the routed composition strategy.
-- The demo path relies on dry-run runtime and agent execution, which validates
-  control flow rather than model quality.
-- The compatibility server is non-streaming and intentionally thin.
-- Agent Runtime is a bounded local task runner, not a full IDE agent.
-- The documented demo writes only to demo or test temp directories and does not
-  mutate checked-in artifacts.
+- The documented demo flow does not retrain models or download model weights
+- The demo validates routing and control flow, not model quality
+- `compose-skills` currently supports only the `routed` strategy
+- The compatibility server is intentionally minimal and non-streaming
+- Agent Runtime is a bounded local task runner, not a full IDE agent
+- Runtime bundles, not raw registry files, are the runtime source of truth
 
-## Research Workflow
+## Research Surface And Backward Compatibility
 
-The original research CLI remains available as `skill-lattice`.
+The underlying research CLI remains available as `skill-lattice`, but it is not
+the primary public entry point for v0.1.
 
-```bash
-skill-lattice train-skill python_skill --dry-run
-skill-lattice train-generic --dry-run
-skill-lattice infer --mode lattice --task-type debugging --prompt "Fix this Python traceback" --dry-run
-skill-lattice eval --dataset data/eval.jsonl --dry-run
-```
+Research-oriented docs live here:
 
-Repository boundaries and the research/report split are summarized in
-[docs/repo-boundary-map.md](docs/repo-boundary-map.md). Additional runnable
-notes live in [examples/README.md](examples/README.md).# SkillLatticeCoder
+- [Research Workflow](docs/research-workflow.md)
+- [Research Results](docs/research-results.md)
+- [Five-Seed Artifact Resume](docs/five-seed-artifact-resume.md)
 
-SkillLatticeCoder is a local research prototype for testing whether a frozen
-small coding model becomes more capable by composing sparse task-specific LoRA
-skills instead of using one monolithic fine-tune.
+## Contributing And Release Notes
 
-## Hypothesis
-
-The experiment compares:
-
-1. frozen base model;
-2. rank-24 generic LoRA trained on all examples;
-3. one routed rank-8 skill LoRA;
-4. up to two routed rank-8 skill LoRAs composed at inference.
-
-The primary statistical claim is supported when the lattice's paired execution
-improvement over generic has a 95% confidence interval above zero. A separate,
-stricter practical criterion requires at least five percentage points of
-absolute improvement and better performance per active parameter.
-
-This remains generative AI: the model generates code, tests, explanations, and
-fixes. Skills alter model weights during generation. They are not retrieval,
-repo indexing, MCP tools, or deterministic patch rules.
-
-## Model and skills
-
-The frozen source model is
-`Qwen/Qwen2.5-Coder-1.5B-Instruct`; Apple Silicon execution uses
-`mlx-community/Qwen2.5-Coder-1.5B-Instruct-4bit`.
-
-Initial skills:
-
-- `python_skill`
-- `debugging_skill`
-- `test_generation_skill`
-- `alternating_skill` (promoted behind a strict semantic gate)
-
-The default `skillcortex_router_v1` uses frozen-base fallback for Python
-generation, validated skill pairs for debugging and test generation, and
-activates `alternating_skill` only for the `alternating` semantic family's
-debugging and test-generation tasks. The pre-promotion baseline remains
-available as `protected_skill_router_without_failure_born`; the previous
-prompt-rule router remains available as `legacy_rule_router`.
-
-## Install
-
-Requires native ARM Python 3.11+ on Apple Silicon.
-
-```bash
-python3 -m venv .venv
-. .venv/bin/activate
-pip install -e '.[test]'
-pytest
-```
-
-Repository boundaries and the current phase-0 split are documented in
-[docs/repo-boundary-map.md](docs/repo-boundary-map.md). Runnable smoke
-examples live in [examples/README.md](examples/README.md), and curated report
-copies live in [reports/research-results.md](reports/research-results.md) and
-[reports/five-seed-artifact-resume.md](reports/five-seed-artifact-resume.md).
-
-## Dry-run the complete control flow
-
-Dry runs do not download or load a model.
-
-```bash
-skill-lattice train-skill python_skill --dry-run
-skill-lattice train-generic --dry-run
-skill-lattice infer --mode base --prompt "Write a Python function" --dry-run
-skill-lattice infer --mode lattice --task-type debugging --prompt "Fix this Python traceback" --dry-run
-skill-lattice eval --dataset data/eval.jsonl --dry-run
-```
-
-Product packaging lives under `skillcortex` and keeps the research workflow
-unchanged:
-
-```bash
-skillcortex package-skill \
-	--skill-id python_skill \
-	--name "Python Skill" \
-	--adapter-dir artifacts/adapters/python_skill \
-	--train-dataset data/train.jsonl \
-	--eval-dataset data/eval.jsonl \
-	--eval-summary artifacts/evaluations/20260620T152056Z/summary.json \
-	--output skills/python_skill
-
-skillcortex validate-skill-package --path skills/python_skill
-skillcortex train-skill python_skill --output skills/python_skill_run --force
-	skillcortex compose-skills \
-		--skills skills/python_skill,skills/debugging_skill \
-		--strategy routed \
-		--output runtime/debugging_bundle
-```
-
-The product package contract, expected files, and reproducibility guarantees
-are documented in [docs/skill-package-contract.md](docs/skill-package-contract.md).
-
-Phase 2 Composer is package-first: valid self-describing skill packages can be
-composed without the internal registry. Official/internal registry files remain
-available as optional enrichment inputs only and are recorded as provenance,
-not source of truth.
-
-Phase 3A Runtime Core consumes the composed runtime bundle directly. The bundle
-is the deployment artifact and source of truth at runtime; registry input is
-not required.
-
-## Serve A Runtime Bundle
-
-Validate a runtime bundle before startup:
-
-```bash
-skillcortex validate-runtime --runtime runtime/debugging_bundle
-```
-
-Run local CLI inference against the same runtime service used by the server:
-
-```bash
-skillcortex infer \
-	--runtime runtime/debugging_bundle \
-	--prompt "Fix this Python traceback" \
-	--dry-run
-```
-
-You can also pass an OpenAI-style chat request file:
-
-```json
-{
-  "messages": [
-    {"role": "system", "content": "You are a debugging assistant."},
-    {"role": "user", "content": "Fix this Python traceback and failing test."}
-  ],
-  "task_type": "debugging"
-}
-```
-
-```bash
-skillcortex infer \
-	--runtime runtime/debugging_bundle \
-	--request-file request.json \
-	--dry-run
-```
-
-Start the minimal OpenAI-compatible compatibility server:
-
-```bash
-skillcortex serve --runtime runtime/debugging_bundle --host 127.0.0.1 --port 8000
-```
-
-Minimal API checks:
-
-```bash
-curl http://127.0.0.1:8000/v1/models
-
-curl http://127.0.0.1:8000/v1/chat/completions \
-	-H 'Content-Type: application/json' \
-	-d '{
-	  "model": "debugging_bundle",
-	  "messages": [
-	    {"role": "user", "content": "Fix this Python traceback"}
-	  ]
-	}'
-```
-
-Current Phase 3A limits:
-
-- non-streaming responses only
-- dry-run support for `infer` and `serve`
-- runtime bundle is the only required deployment input
-- registry enrichment remains optional provenance only
-- the OpenAI-compatible server is a thin compatibility layer over the shared runtime service
-
-## Run A Local Agent Task
-
-Phase 3B adds a native local agent loop on top of Runtime Core. The OpenAI API
-remains a compatibility surface; the agent uses the shared runtime service
-directly.
-
-Run a bounded local task against a repository:
-
-```bash
-skillcortex agent run \
-	--runtime runtime/debugging_bundle \
-	--repo ./toy-repo \
-	--task "Fix the failing answer implementation." \
-	--test-command "PYTHONPATH=. uv run pytest -q" \
-	--trace-out artifacts/agent-trace.json
-```
-
-Safety modes:
-
-- `--writes confirm` is the default and keeps file mutation human-gated
-- `--writes off` never mutates files and only emits proposed diffs
-- `--writes on` applies supported file-replacement actions inside the repo root
-
-Current Phase 3B limits:
-
-- local, single-run execution only
-- bounded safe tool loop: list files, read files, propose/apply file replacement, run one opt-in validation command
-- dynamic skill routing happens per inference step
-- execution traces record selected skills per step
-- no IDE orchestration, background tasks, or distributed coordination
-
-## Train
-
-```bash
-skill-lattice train-skill python_skill
-skill-lattice train-skill debugging_skill
-skill-lattice train-skill test_generation_skill
-skill-lattice train-generic
-```
-
-Adapters are saved under `artifacts/adapters/`. The base model remains frozen;
-MLX-LM trains only LoRA parameters.
-
-## Infer
-
-```bash
-skill-lattice infer --mode base --prompt "Write a Python function"
-skill-lattice infer --mode generic --prompt "Write a Python function"
-skill-lattice infer --mode single-skill --skill debugging_skill --prompt "Fix this traceback"
-skill-lattice infer --mode lattice --task-type debugging --prompt "Fix this Python traceback"
-```
-
-Lattice composition concatenates compatible MLX LoRA ranks so that the
-resulting delta equals the weighted sum of the selected adapters. It never
-fuses adapters into the quantized base.
-
-Use `--router-policy legacy_rule_router` for the original prompt-rule behavior.
-Use `--router-policy protected_skill_router_without_failure_born` for the
-validated pre-promotion baseline.
-
-## Evaluate
-
-```bash
-skill-lattice eval --dataset data/eval.jsonl
-```
-
-Evaluation writes raw JSONL, `summary.json`, and `report.md` under
-`artifacts/evaluations/`. Metrics include fuzzy and exact match, Python syntax
-validity, trusted-fixture subprocess results, latency, token counts, peak MLX
-memory, and active adapter parameters.
-
-The checked-in benchmark contains 150 execution-backed cases: 50 Python
-generation, 50 debugging, and 50 test-generation tasks. Test-generation cases
-must pass against the correct implementation and fail against a paired mutant.
-Rebuild it deterministically with:
-
-```bash
-python scripts/build_eval.py data/eval.jsonl
-```
-
-Confidence intervals bootstrap 50 semantic families rather than treating the
-three task formulations of each behavior as independent samples.
-
-## Five-seed experiment
-
-The conclusive experiment trains three rank-8 skills for 100 iterations each
-and the rank-24 generic baseline for 300 iterations, matching aggregate
-optimizer steps. It evaluates routed and oracle lattice modes:
-
-```bash
-python scripts/run_seeds.py --seeds 11 22 33 44 55
-```
-
-Adapters and per-seed results are stored under
-`artifacts/experiments/five-seed/`. The combined `summary.json` bootstraps
-seed × semantic-family pairs. Use `--dry-run` to validate the full control
-flow without training or model loading.
-
-### Phase 1 result
-
-Across five seeds and 750 executions per mode:
-
-- Generic LoRA: **40.67%**
-- Single skill: **44.27%**
-- Routed lattice: **45.60%**
-- Oracle lattice: **47.60%**
-
-Routed lattice improved over generic by **+4.93 percentage points**, with a
-cluster-bootstrap 95% confidence interval of **+1.47 to +8.40 points**, while
-using 54.2% fewer active adapter parameters. It won in all five seeds.
-
-This statistically supports the claim that the lattice beats generic, but
-narrowly misses the preregistered five-point practical threshold. Oracle
-routing improved by **+6.93 points**, showing that routing is the main next
-target. Python generation regressed after fine-tuning, so the result does not
-yet support a claim of general coding improvement.
-
-See [the complete Phase 1 results](reports/research-results.md) for methodology,
-per-task and per-seed tables, limitations, and reproduction details.
-
-### Recent artifact outcomes
-
-- FastAPI contract baseline: see `artifacts/experiments/fastapi-contract-baseline/summary.md` for per-behavior fuzzy scores, mean latency, and active-parameter counts. The candidate `skillcortex_router_v1` uses 466,944 active adapter parameters; per-behavior summaries and latency comparisons are recorded in `summary.json`.
-- Evaluation report (2026-06-20): see `artifacts/evaluations/20260620T152056Z/report.md`. The evaluation labels its hypothesis inconclusive and reports per-mode fuzzy/exact/syntax/execution diagnostics; parameter-efficiency details are available in the corresponding `summary.json` files under `artifacts/`.
-
-Execution fixtures are for trusted local toy data only. They are isolated in a
-temporary directory with a timeout, but they are not a security sandbox.
-
-## Roadmap
-
-- Stage 2: hypernetwork-generated micro-skills.
-- Stage 3: adaptive-depth coding model.
-
-Learned routing, extra skills, PEFT compatibility, distributed training, and
-untrusted-code sandboxing are intentionally deferred.
+- [Contributing Guide](CONTRIBUTING.md)
+- [Changelog](CHANGELOG.md)
+- [v0.1.0 Release Notes](docs/releases/v0.1.0.md)

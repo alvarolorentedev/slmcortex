@@ -1,0 +1,82 @@
+name: Bug report
+description: Report a reproducible product, packaging, runtime, demo, or documentation issue.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a Skill Cortex issue.
+
+        Please include the exact command, environment, and expected vs actual behavior.
+  - type: input
+    id: summary
+    attributes:
+      label: Summary
+      description: One-line description of the problem.
+      placeholder: skillcortex validate-runtime fails on the documented demo bundle
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - README or docs
+        - Packaging
+        - Compose skills
+        - Runtime validation or inference
+        - Compatibility server
+        - Agent runtime
+        - Research workflow
+        - CI or release engineering
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: macOS 15.5
+    validations:
+      required: true
+  - type: input
+    id: python
+    attributes:
+      label: Python version
+      placeholder: Python 3.11.9
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Command
+      description: Paste the exact command you ran.
+      render: bash
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      description: Minimal numbered steps are best.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: Paste relevant output if available.
+      render: text

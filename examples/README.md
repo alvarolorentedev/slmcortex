@@ -8,7 +8,8 @@ Run the no-model end-to-end demo:
 python scripts/run_skillcortex_demo.py
 ```
 
-For the manual command-by-command quickstart, see [README.md](../README.md).
+For the manual command-by-command quickstart and product overview, see
+[README.md](../README.md).
 
 ## Research Dry-Run Smoke Checks
 
@@ -19,6 +20,8 @@ skill-lattice train-generic --dry-run
 skill-lattice infer --mode lattice --task-type debugging --prompt "Fix this Python traceback" --dry-run
 skill-lattice eval --dataset data/eval.jsonl --dry-run
 ```
+
+Research workflow context lives in [docs/research-workflow.md](../docs/research-workflow.md).
 
 ## Repository Map
 
