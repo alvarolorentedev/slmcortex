@@ -44,6 +44,21 @@ def _copy_demo_repo(destination: Path) -> Path:
     return destination
 
 
+def _stage_demo_adapter(skill_id: str, destination: Path) -> Path:
+    source = ROOT / "artifacts" / "adapters" / skill_id
+    destination.mkdir(parents=True, exist_ok=True)
+
+    shutil.copy2(source / "adapter_config.json", destination / "adapter_config.json")
+    if (source / "metadata.json").exists():
+        shutil.copy2(source / "metadata.json", destination / "metadata.json")
+
+    weights_source = source / "adapters.safetensors"
+    if not weights_source.exists():
+        weights_source = source / "0000100_adapters.safetensors"
+    shutil.copy2(weights_source, destination / "adapters.safetensors")
+    return destination
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Run the no-model Skill Cortex v0.1 demo flow.",
@@ -63,9 +78,12 @@ def main(argv: list[str] | None = None) -> int:
 
     python_skill = output_root / "python_skill"
     debugging_skill = output_root / "debugging_skill"
+    demo_adapters = output_root / "demo-adapters"
     runtime = output_root / "runtime"
     toy_repo = _copy_demo_repo(output_root / "toy-repo")
     trace_path = output_root / "agent-trace.json"
+    python_adapter = _stage_demo_adapter("python_skill", demo_adapters / "python_skill")
+    debugging_adapter = _stage_demo_adapter("debugging_skill", demo_adapters / "debugging_skill")
 
     dataset_train = FIXTURES / "train.jsonl"
     dataset_eval = FIXTURES / "eval.jsonl"
@@ -82,7 +100,7 @@ def main(argv: list[str] | None = None) -> int:
                 "--name",
                 "Python Skill",
                 "--adapter-dir",
-                "artifacts/adapters/python_skill",
+                str(python_adapter),
                 "--train-dataset",
                 str(dataset_train),
                 "--eval-dataset",
@@ -102,7 +120,7 @@ def main(argv: list[str] | None = None) -> int:
                 "--name",
                 "Debugging Skill",
                 "--adapter-dir",
-                "artifacts/adapters/debugging_skill",
+                str(debugging_adapter),
                 "--train-dataset",
                 str(dataset_train),
                 "--eval-dataset",
