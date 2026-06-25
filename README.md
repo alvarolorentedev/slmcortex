@@ -53,6 +53,12 @@ pip install -e '.[test]'
 pytest
 ```
 
+Repository boundaries and the current phase-0 split are documented in
+[docs/repo-boundary-map.md](docs/repo-boundary-map.md). Runnable smoke
+examples live in [examples/README.md](examples/README.md), and curated report
+copies live in [reports/research-results.md](reports/research-results.md) and
+[reports/five-seed-artifact-resume.md](reports/five-seed-artifact-resume.md).
+
 ## Dry-run the complete control flow
 
 Dry runs do not download or load a model.
@@ -151,7 +157,7 @@ routing improved by **+6.93 points**, showing that routing is the main next
 target. Python generation regressed after fine-tuning, so the result does not
 yet support a claim of general coding improvement.
 
-See [the complete Phase 1 results](docs/research-results.md) for methodology,
+See [the complete Phase 1 results](reports/research-results.md) for methodology,
 per-task and per-seed tables, limitations, and reproduction details.
 
 ### Recent artifact outcomes

@@ -15,8 +15,8 @@ from .train_generic import train_generic
 from .train_skill import train_skill
 
 
-def parser() -> argparse.ArgumentParser:
-    root = argparse.ArgumentParser(prog="skill-lattice")
+def parser(prog: str = "skill-lattice") -> argparse.ArgumentParser:
+    root = argparse.ArgumentParser(prog=prog)
     commands = root.add_subparsers(dest="command", required=True)
 
     skill = commands.add_parser("train-skill")
@@ -58,8 +58,8 @@ def parser() -> argparse.ArgumentParser:
     return root
 
 
-def main(argv: list[str] | None = None) -> int:
-    arguments = parser().parse_args(argv)
+def main(argv: list[str] | None = None, *, prog: str = "skill-lattice") -> int:
+    arguments = parser(prog).parse_args(argv)
     try:
         if arguments.command == "train-skill":
             result = train_skill(

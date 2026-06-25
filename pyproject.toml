@@ -20,6 +20,7 @@ test = [
 
 [project.scripts]
 skill-lattice = "skill_lattice_coder.cli:main"
+skillcortex = "skillcortex.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
