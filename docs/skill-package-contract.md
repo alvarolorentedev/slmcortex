@@ -31,6 +31,15 @@ Validate a package:
 skillcortex validate-skill-package --path skills/python_skill
 ```
 
+Compose validated packages into a deterministic runtime bundle:
+
+```bash
+skillcortex compose-skills \
+  --skills skills/python_skill,skills/debugging_skill \
+  --strategy routed \
+  --output runtime/debugging_bundle
+```
+
 ## Expected Output
 
 ```text
@@ -48,9 +57,62 @@ skills/python_skill/
 
 `examples.jsonl` is optional and is only written when supplied.
 
+`skill.yaml` and `metadata.json` may also include a `composition` section.
+When present, it makes the package self-describing for package-first
+composition.
+
 Product `train-skill` also creates an isolated sibling run directory named
 `.PACKAGE_NAME.run` containing the temporary training data, adapter output, and
 evaluation summary used to build the final package.
+
+## Package-First Composition Metadata
+
+Phase 2 Composer treats package metadata as the source of truth. The internal
+research registry is optional enrichment only.
+
+Minimal required fields for a self-describing package:
+
+```yaml
+composition:
+  capabilities:
+    allowed_task_types: [debugging]
+  activation:
+    default_route_type: adapter
+    scope: task
+  compatibility:
+    compatible_skills: []
+    incompatible_skills: []
+  routing:
+    tasks: {}
+```
+
+Required fields:
+
+- `composition.capabilities.allowed_task_types`
+- `composition.activation.default_route_type`
+- `composition.activation.scope`
+
+Optional fields:
+
+- `composition.activation.semantic_families`
+- `composition.compatibility.compatible_skills`
+- `composition.compatibility.incompatible_skills`
+- `composition.routing.tasks`
+
+`composition.routing.tasks` is optional, but official/internal skills use it to
+encode routing order and companion requirements so Composer can mirror the
+validated router behavior without consulting the registry.
+
+Task routing entries currently support:
+
+- `order`: lower values are selected earlier in a route
+- `requires_all_of`: all listed skills must be present in the composition
+- `requires_any_of`: at least one listed skill must be present in the composition
+
+Self-describing external packages work without any registry input. Older
+packages that do not carry `composition` metadata remain valid Phase 1 skill
+packages, but they are not composable by Phase 2 Composer unless future
+non-authoritative enrichment support is used to fill missing declarations.
 
 ## Validation Rules
 
@@ -59,6 +121,10 @@ evaluation summary used to build the final package.
 - `metadata.json` must record deterministic per-file checksums for the package.
 - `metadata.json` must record protected input snapshots and confirm they stayed
   unchanged.
+- If `composition` metadata is present, `skill.yaml` and `metadata.json` must
+  record the same value.
+- If `composition` metadata is present, `validate-skill-package` validates its
+  schema and task declarations.
 - Validation rechecks package file checksums.
 - Validation rechecks the current hashes of protected inputs when those source
   files still exist in the workspace.
@@ -85,6 +151,47 @@ If any protected input changes during packaging, the command fails.
 - package metadata records the resolved base model, runtime model, rank,
   target modules, dataset hashes, and training command when available
 - package metadata records the run directory and source artifact locations
+- package composition metadata, when present, is written to both `skill.yaml`
+  and `metadata.json`
+
+## Compose-Skills Runtime Bundle
+
+`compose-skills` writes a deterministic runtime bundle:
+
+```text
+runtime/debugging_bundle/
+├── composition.yaml
+├── router_config.json
+├── active_skills.json
+├── compatibility_report.json
+├── budget_report.json
+├── checksums.json
+└── README.md
+```
+
+Bundle files:
+
+- `composition.yaml`: source-of-truth composition manifest with skills, routes,
+  runtime base model, and provenance
+- `router_config.json`: projected route table for runtime consumption
+- `active_skills.json`: flat view of active packaged skills and route membership
+- `compatibility_report.json`: compatibility checks plus optional enrichment
+  provenance
+- `budget_report.json`: stored and active adapter parameter and file-size budget
+- `checksums.json`: deterministic hashes for emitted bundle files plus source
+  package fingerprints
+- `README.md`: human-readable summary
+
+`compose-skills` never mutates source packages, adapters, datasets, registries,
+or benchmark artifacts.
+
+Optional registry enrichment:
+
+- is never required for a complete self-describing package
+- is never treated as the source of truth when package metadata is present
+- is reported only as enrichment and provenance
+- does not override explicit package metadata unless a future explicit override
+  mode is added
 
 ## Current Scope
 

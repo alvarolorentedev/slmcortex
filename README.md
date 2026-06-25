@@ -86,10 +86,19 @@ skillcortex package-skill \
 
 skillcortex validate-skill-package --path skills/python_skill
 skillcortex train-skill python_skill --output skills/python_skill_run --force
+	skillcortex compose-skills \
+		--skills skills/python_skill,skills/debugging_skill \
+		--strategy routed \
+		--output runtime/debugging_bundle
 ```
 
 The product package contract, expected files, and reproducibility guarantees
 are documented in [docs/skill-package-contract.md](docs/skill-package-contract.md).
+
+Phase 2 Composer is package-first: valid self-describing skill packages can be
+composed without the internal registry. Official/internal registry files remain
+available as optional enrichment inputs only and are recorded as provenance,
+not source of truth.
 
 ## Train
 

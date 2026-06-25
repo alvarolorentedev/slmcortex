@@ -32,6 +32,107 @@ REQUIRED_PACKAGE_FILES = (
 )
 
 CHECKSUM_EXCLUDES = {"metadata.json"}
+DEFAULT_COMPOSITION = {
+    "python_skill": {
+        "capabilities": {
+            "allowed_task_types": ["debugging", "test_generation"],
+        },
+        "activation": {
+            "default_route_type": "adapter",
+            "scope": "task",
+            "semantic_families": [],
+        },
+        "compatibility": {
+            "compatible_skills": [],
+            "incompatible_skills": [],
+        },
+        "routing": {
+            "tasks": {
+                "debugging": {
+                    "order": 20,
+                    "requires_any_of": ["debugging_skill"],
+                },
+                "test_generation": {
+                    "order": 10,
+                    "requires_any_of": ["test_generation_skill"],
+                },
+            }
+        },
+    },
+    "debugging_skill": {
+        "capabilities": {
+            "allowed_task_types": ["debugging"],
+        },
+        "activation": {
+            "default_route_type": "adapter",
+            "scope": "task",
+            "semantic_families": [],
+        },
+        "compatibility": {
+            "compatible_skills": [],
+            "incompatible_skills": [],
+        },
+        "routing": {
+            "tasks": {
+                "debugging": {
+                    "order": 10,
+                    "requires_all_of": ["python_skill"],
+                }
+            }
+        },
+    },
+    "test_generation_skill": {
+        "capabilities": {
+            "allowed_task_types": ["test_generation"],
+        },
+        "activation": {
+            "default_route_type": "adapter",
+            "scope": "task",
+            "semantic_families": [],
+        },
+        "compatibility": {
+            "compatible_skills": [],
+            "incompatible_skills": [],
+        },
+        "routing": {
+            "tasks": {
+                "test_generation": {
+                    "order": 20,
+                    "requires_all_of": ["python_skill"],
+                }
+            }
+        },
+    },
+    "alternating_skill": {
+        "capabilities": {
+            "allowed_task_types": ["debugging", "test_generation"],
+        },
+        "activation": {
+            "default_route_type": "adapter",
+            "scope": "semantic_family",
+            "semantic_families": ["alternating"],
+        },
+        "compatibility": {
+            "compatible_skills": [],
+            "incompatible_skills": [],
+        },
+        "routing": {
+            "tasks": {
+                "debugging": {
+                    "order": 30,
+                    "requires_all_of": ["debugging_skill", "python_skill"],
+                },
+                "test_generation": {
+                    "order": 30,
+                    "requires_all_of": ["python_skill", "test_generation_skill"],
+                },
+            }
+        },
+    },
+}
+
+COMPOSITION_SCOPES = {"task", "semantic_family"}
+COMPOSITION_ROUTE_TYPES = {"adapter", "base_fallback"}
 
 
 def train_skill_package(
@@ -128,6 +229,7 @@ def package_skill(
     version: str,
     description: str | None = None,
     examples: Path | None = None,
+    composition: dict | None = None,
     force: bool = False,
     dry_run: bool = False,
     protected_inputs: dict | None = None,
@@ -169,6 +271,7 @@ def package_skill(
         eval_summary=eval_summary,
         eval_payload=eval_payload,
         examples=examples,
+        composition=composition,
         protected_inputs=protected_inputs,
         source_artifacts=source_artifacts,
         training_details=training_details,
@@ -271,6 +374,13 @@ def validate_skill_package(path: Path) -> dict:
     examples_path = (skill_manifest.get("examples") or {}).get("path")
     if examples_path and not (root / examples_path).exists():
         raise ValueError("examples.jsonl is declared but missing")
+    if skill_manifest.get("composition") != metadata.get("composition"):
+        if skill_manifest.get("composition") is None and metadata.get("composition") is None:
+            pass
+        else:
+            raise ValueError("manifest mismatch for composition metadata")
+    if skill_manifest.get("composition") is not None:
+        validate_composition_metadata(skill_manifest["composition"])
     return {
         "status": "valid",
         "path": str(root),
@@ -292,6 +402,7 @@ def _build_manifests(
     eval_summary: Path,
     eval_payload: dict,
     examples: Path | None,
+    composition: dict | None,
     protected_inputs: dict | None,
     source_artifacts: dict | None,
     training_details: dict | None,
@@ -307,6 +418,7 @@ def _build_manifests(
     train_dataset_hash = _sha256(train_dataset)
     eval_dataset_hash = _sha256(eval_dataset)
     examples_count = _line_count(examples) if examples else 0
+    resolved_composition = composition or _default_composition(skill_id)
     package_training = {
         "seed": int(adapter_metadata.get("seed") or training_defaults["seed"]),
         "batch_size": int(
@@ -394,6 +506,7 @@ def _build_manifests(
         or {
             "adapter_source_dir": str(adapter_dir),
         },
+        "composition": resolved_composition,
         "protected_inputs": protected_inputs,
     }
     skill_yaml = {
@@ -425,6 +538,8 @@ def _build_manifests(
             "training_config_path": "training_config.json",
         },
     }
+    if resolved_composition is not None:
+        skill_yaml["composition"] = resolved_composition
     if examples is not None:
         skill_yaml["examples"] = {"path": "examples.jsonl", "count": examples_count}
     readme = _build_readme(name, skill_id, version, description, metadata, evaluation)
@@ -708,6 +823,66 @@ def _normalized_skill_id(skill_id: str) -> str:
     if not all(char.isalnum() or char == "_" for char in normalized):
         raise ValueError("skill_id must contain only letters, numbers, dashes, or underscores")
     return normalized
+
+
+def _default_composition(skill_id: str) -> dict | None:
+    composition = DEFAULT_COMPOSITION.get(skill_id)
+    if composition is None:
+        return None
+    return json.loads(json.dumps(composition, sort_keys=True))
+
+
+def validate_composition_metadata(composition: dict) -> None:
+    if not isinstance(composition, dict):
+        raise ValueError("composition metadata must be a mapping")
+    capabilities = composition.get("capabilities") or {}
+    activation = composition.get("activation") or {}
+    compatibility = composition.get("compatibility") or {}
+    routing = composition.get("routing") or {}
+    allowed_task_types = capabilities.get("allowed_task_types") or []
+    if not allowed_task_types:
+        raise ValueError("composition.capabilities.allowed_task_types must be non-empty")
+    unknown_tasks = set(allowed_task_types) - {"python_generation", "debugging", "test_generation"}
+    if unknown_tasks:
+        raise ValueError(
+            f"unknown composition allowed_task_type: {sorted(unknown_tasks)[0]}"
+        )
+    route_type = activation.get("default_route_type")
+    if route_type not in COMPOSITION_ROUTE_TYPES:
+        raise ValueError(
+            "composition.activation.default_route_type must be 'adapter' or 'base_fallback'"
+        )
+    scope = activation.get("scope")
+    if scope not in COMPOSITION_SCOPES:
+        raise ValueError("composition.activation.scope must be 'task' or 'semantic_family'")
+    semantic_families = activation.get("semantic_families") or []
+    if scope == "semantic_family" and not semantic_families:
+        raise ValueError(
+            "composition.activation.semantic_families must be non-empty for semantic_family scope"
+        )
+    for key in ("compatible_skills", "incompatible_skills"):
+        value = compatibility.get(key) or []
+        if len(value) != len(set(value)):
+            raise ValueError(f"composition.compatibility.{key} must not contain duplicates")
+    task_routing = routing.get("tasks") or {}
+    for task_type, task_rules in sorted(task_routing.items()):
+        if task_type not in {"python_generation", "debugging", "test_generation"}:
+            raise ValueError(f"unknown composition routing task: {task_type}")
+        if task_type not in allowed_task_types:
+            raise ValueError(
+                f"composition.routing.tasks.{task_type} requires task to be in allowed_task_types"
+            )
+        if not isinstance(task_rules, dict):
+            raise ValueError(f"composition.routing.tasks.{task_type} must be a mapping")
+        order = task_rules.get("order")
+        if order is not None and (not isinstance(order, int) or order < 0):
+            raise ValueError(f"composition.routing.tasks.{task_type}.order must be a non-negative integer")
+        for key in ("requires_all_of", "requires_any_of"):
+            values = task_rules.get(key) or []
+            if len(values) != len(set(values)):
+                raise ValueError(
+                    f"composition.routing.tasks.{task_type}.{key} must not contain duplicates"
+                )
 
 
 def _nonempty(name: str, value: str) -> None:

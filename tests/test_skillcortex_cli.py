@@ -3,6 +3,7 @@ import hashlib
 from pathlib import Path
 
 import pytest
+import yaml
 
 from skillcortex.cli import main
 
@@ -64,8 +65,13 @@ def test_package_skill_and_validate_package(tmp_path):
     assert (output / "examples.jsonl").exists()
     assert (output / "adapter" / "adapters.safetensors").exists()
     metadata = json.loads((output / "metadata.json").read_text())
+    skill_manifest = yaml.safe_load((output / "skill.yaml").read_text())
     assert metadata["checksums"]["README.md"]
     assert metadata["protected_inputs"]["all_unchanged"] is True
+    assert skill_manifest["composition"]["capabilities"]["allowed_task_types"] == [
+        "debugging",
+        "test_generation",
+    ]
 
     assert main(["validate-skill-package", "--path", str(output)]) == 0
 
@@ -187,3 +193,326 @@ def test_product_train_skill_creates_isolated_run_and_package(monkeypatch, tmp_p
     after = hashlib.sha256(protected_adapter.read_bytes()).hexdigest()
     assert before == after
     assert main(["validate-skill-package", "--path", str(output)]) == 0
+
+
+def test_package_skill_can_record_custom_composition_metadata(tmp_path):
+    output = tmp_path / "external_skill"
+    eval_summary = tmp_path / "eval-summary.json"
+    eval_summary.write_text(json.dumps({"modes": {}, "tasks": {}}) + "\n")
+
+    assert (
+        main(
+            [
+                "package-skill",
+                "--skill-id",
+                "external_skill",
+                "--name",
+                "External Skill",
+                "--adapter-dir",
+                "artifacts/adapters/python_skill",
+                "--output",
+                str(output),
+                "--train-dataset",
+                "data/train.jsonl",
+                "--eval-dataset",
+                "data/eval.jsonl",
+                "--eval-summary",
+                str(eval_summary),
+                "--allowed-task-types",
+                "debugging",
+                "--activation-scope",
+                "task",
+            ]
+        )
+        == 0
+    )
+    skill_manifest = yaml.safe_load((output / "skill.yaml").read_text())
+    assert skill_manifest["composition"]["capabilities"]["allowed_task_types"] == [
+        "debugging"
+    ]
+    assert skill_manifest["composition"]["routing"] == {"tasks": {}}
+
+
+def test_compose_skills_writes_runtime_bundle(tmp_path):
+    python_output = tmp_path / "python_skill"
+    debugging_output = tmp_path / "debugging_skill"
+    eval_summary = tmp_path / "eval-summary.json"
+    eval_summary.write_text(json.dumps({"modes": {}, "tasks": {}}) + "\n")
+
+    for skill_id, name, output in (
+        ("python_skill", "Python Skill", python_output),
+        ("debugging_skill", "Debugging Skill", debugging_output),
+    ):
+        assert (
+            main(
+                [
+                    "package-skill",
+                    "--skill-id",
+                    skill_id,
+                    "--name",
+                    name,
+                    "--adapter-dir",
+                    f"artifacts/adapters/{skill_id}",
+                    "--output",
+                    str(output),
+                    "--train-dataset",
+                    "data/train.jsonl",
+                    "--eval-dataset",
+                    "data/eval.jsonl",
+                    "--eval-summary",
+                    str(eval_summary),
+                ]
+            )
+            == 0
+        )
+
+    runtime = tmp_path / "runtime"
+    assert (
+        main(
+            [
+                "compose-skills",
+                "--skills",
+                f"{python_output},{debugging_output}",
+                "--strategy",
+                "routed",
+                "--output",
+                str(runtime),
+            ]
+        )
+        == 0
+    )
+    assert (runtime / "composition.yaml").exists()
+    assert (runtime / "router_config.json").exists()
+    assert (runtime / "active_skills.json").exists()
+    assert (runtime / "compatibility_report.json").exists()
+    assert (runtime / "budget_report.json").exists()
+    assert (runtime / "checksums.json").exists()
+    router = json.loads((runtime / "router_config.json").read_text())
+    debugging_route = next(
+        route for route in router["routes"] if route["route_id"] == "debugging.default"
+    )
+    assert debugging_route["selected_skills"] == ["debugging_skill", "python_skill"]
+    python_route = next(
+        route for route in router["routes"] if route["route_id"] == "python_generation.default"
+    )
+    assert python_route["route_type"] == "base_fallback"
+    assert python_route["selected_skills"] == []
+
+
+def test_official_composer_routes_match_validated_alternating_behavior(tmp_path):
+    packages = {}
+    eval_summary = tmp_path / "eval-summary.json"
+    eval_summary.write_text(json.dumps({"modes": {}, "tasks": {}}) + "\n")
+
+    specs = (
+        ("python_skill", "Python Skill", "artifacts/adapters/python_skill"),
+        ("debugging_skill", "Debugging Skill", "artifacts/adapters/debugging_skill"),
+        ("test_generation_skill", "Test Generation Skill", "artifacts/adapters/test_generation_skill"),
+        (
+            "alternating_skill",
+            "Alternating Skill",
+            "artifacts/experiments/failure-born-skill/alternating_skill/seed-11/adapters/alternating_skill",
+        ),
+    )
+    for skill_id, name, adapter_dir in specs:
+        output = tmp_path / skill_id
+        packages[skill_id] = output
+        assert (
+            main(
+                [
+                    "package-skill",
+                    "--skill-id",
+                    skill_id,
+                    "--name",
+                    name,
+                    "--adapter-dir",
+                    adapter_dir,
+                    "--output",
+                    str(output),
+                    "--train-dataset",
+                    "data/train.jsonl",
+                    "--eval-dataset",
+                    "data/eval.jsonl",
+                    "--eval-summary",
+                    str(eval_summary),
+                ]
+            )
+            == 0
+        )
+
+    runtime = tmp_path / "runtime-alternating"
+    assert (
+        main(
+            [
+                "compose-skills",
+                "--skills",
+                ",".join(str(packages[skill_id]) for skill_id in specs and packages),
+                "--strategy",
+                "routed",
+                "--output",
+                str(runtime),
+            ]
+        )
+        == 0
+    )
+    router = json.loads((runtime / "router_config.json").read_text())
+    debugging_default = next(
+        route for route in router["routes"] if route["route_id"] == "debugging.default"
+    )
+    test_default = next(
+        route for route in router["routes"] if route["route_id"] == "test_generation.default"
+    )
+    debugging_alternating = next(
+        route for route in router["routes"] if route["route_id"] == "debugging.alternating"
+    )
+    test_alternating = next(
+        route for route in router["routes"] if route["route_id"] == "test_generation.alternating"
+    )
+    assert debugging_default["selected_skills"] == ["debugging_skill", "python_skill"]
+    assert test_default["selected_skills"] == ["python_skill", "test_generation_skill"]
+    assert debugging_alternating["selected_skills"] == [
+        "debugging_skill",
+        "python_skill",
+        "alternating_skill",
+    ]
+    assert test_alternating["selected_skills"] == [
+        "python_skill",
+        "test_generation_skill",
+        "alternating_skill",
+    ]
+
+
+def test_compose_skills_can_attach_optional_registry_enrichment_without_override(tmp_path):
+    output = tmp_path / "python_skill"
+    eval_summary = tmp_path / "eval-summary.json"
+    eval_summary.write_text(json.dumps({"modes": {}, "tasks": {}}) + "\n")
+
+    assert (
+        main(
+            [
+                "package-skill",
+                "--skill-id",
+                "python_skill",
+                "--name",
+                "Python Skill",
+                "--adapter-dir",
+                "artifacts/adapters/python_skill",
+                "--output",
+                str(output),
+                "--train-dataset",
+                "data/train.jsonl",
+                "--eval-dataset",
+                "data/eval.jsonl",
+                "--eval-summary",
+                str(eval_summary),
+            ]
+        )
+        == 0
+    )
+    registry = tmp_path / "registry.json"
+    registry.write_text(
+        json.dumps(
+            {
+                "skills": [
+                    {
+                        "skill_name": "python_skill",
+                        "status": "core",
+                        "origin": "seed_skill",
+                        "router": "skillcortex_router_v1",
+                        "activation_scope": "protected_router",
+                        "allowed_task_types": ["debugging", "test_generation", "python_generation"],
+                    }
+                ]
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n"
+    )
+
+    runtime = tmp_path / "runtime"
+    assert (
+        main(
+            [
+                "compose-skills",
+                "--skills",
+                str(output),
+                "--strategy",
+                "routed",
+                "--registry",
+                str(registry),
+                "--output",
+                str(runtime),
+            ]
+        )
+        == 0
+    )
+    compatibility = json.loads((runtime / "compatibility_report.json").read_text())
+    composition = yaml.safe_load((runtime / "composition.yaml").read_text())
+    assert compatibility["optional_enrichment_used"] is True
+    assert compatibility["registry_enrichment"]["source_of_truth"] == "package"
+    assert compatibility["registry_enrichment"]["override_applied"] is False
+    assert compatibility["warnings"] == [
+        "registry enrichment differs from package metadata for python_skill allowed_task_types"
+    ]
+    python_skill = next(
+        item for item in composition["skills"] if item["skill_id"] == "python_skill"
+    )
+    assert python_skill["composition"]["capabilities"]["allowed_task_types"] == [
+        "debugging",
+        "test_generation",
+    ]
+
+
+def test_compose_skills_rejects_legacy_package_without_composition_metadata(tmp_path):
+    output = tmp_path / "python_skill"
+    eval_summary = tmp_path / "eval-summary.json"
+    eval_summary.write_text(json.dumps({"modes": {}, "tasks": {}}) + "\n")
+
+    assert (
+        main(
+            [
+                "package-skill",
+                "--skill-id",
+                "python_skill",
+                "--name",
+                "Python Skill",
+                "--adapter-dir",
+                "artifacts/adapters/python_skill",
+                "--output",
+                str(output),
+                "--train-dataset",
+                "data/train.jsonl",
+                "--eval-dataset",
+                "data/eval.jsonl",
+                "--eval-summary",
+                str(eval_summary),
+            ]
+        )
+        == 0
+    )
+    skill_manifest = yaml.safe_load((output / "skill.yaml").read_text())
+    metadata = json.loads((output / "metadata.json").read_text())
+    skill_manifest.pop("composition")
+    metadata.pop("composition")
+    (output / "skill.yaml").write_text(yaml.safe_dump(skill_manifest, sort_keys=False))
+    metadata["checksums"]["skill.yaml"] = hashlib.sha256(
+        (output / "skill.yaml").read_bytes()
+    ).hexdigest()
+    (output / "metadata.json").write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n")
+
+    runtime = tmp_path / "runtime"
+    assert (
+        main(
+            [
+                "compose-skills",
+                "--skills",
+                str(output),
+                "--strategy",
+                "routed",
+                "--output",
+                str(runtime),
+            ]
+        )
+        == 2
+    )

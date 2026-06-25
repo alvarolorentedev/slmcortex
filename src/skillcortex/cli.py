@@ -4,9 +4,51 @@ import sys
 from pathlib import Path
 
 from skill_lattice_coder.cli import main as _main
-from skill_lattice_coder.schemas import SKILLS
+from skill_lattice_coder.schemas import SKILLS, TASK_TYPES
 
+from .composer import compose_skill_packages
 from .packaging import package_skill, train_skill_package, validate_skill_package
+
+
+COMPOSITION_SCOPES = ("task", "semantic_family")
+
+
+def _csv_paths(value: str) -> list[Path]:
+    return [Path(item.strip()) for item in value.split(",") if item.strip()]
+
+
+def _package_composition(parsed: argparse.Namespace) -> dict | None:
+    if not any(
+        (
+            parsed.allowed_task_types,
+            parsed.activation_scope,
+            parsed.semantic_families,
+            parsed.compatible_skills,
+            parsed.incompatible_skills,
+        )
+    ):
+        return None
+    if not parsed.allowed_task_types:
+        raise ValueError("--allowed-task-types is required when composition metadata is provided")
+    if not parsed.activation_scope:
+        raise ValueError("--activation-scope is required when composition metadata is provided")
+    return {
+        "capabilities": {
+            "allowed_task_types": list(parsed.allowed_task_types),
+        },
+        "activation": {
+            "default_route_type": "adapter",
+            "scope": parsed.activation_scope,
+            "semantic_families": list(parsed.semantic_families or []),
+        },
+        "compatibility": {
+            "compatible_skills": list(parsed.compatible_skills or []),
+            "incompatible_skills": list(parsed.incompatible_skills or []),
+        },
+        "routing": {
+            "tasks": {},
+        },
+    }
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -37,17 +79,30 @@ def _parser() -> argparse.ArgumentParser:
     package.add_argument("--version", default="0.1.0")
     package.add_argument("--description")
     package.add_argument("--examples")
+    package.add_argument("--allowed-task-types", nargs="+", choices=TASK_TYPES)
+    package.add_argument("--activation-scope", choices=COMPOSITION_SCOPES)
+    package.add_argument("--semantic-families", nargs="+")
+    package.add_argument("--compatible-skills", nargs="+")
+    package.add_argument("--incompatible-skills", nargs="+")
     package.add_argument("--force", action="store_true")
     package.add_argument("--dry-run", action="store_true")
 
     validate = commands.add_parser("validate-skill-package")
     validate.add_argument("--path", required=True)
+
+    compose = commands.add_parser("compose-skills")
+    compose.add_argument("--skills", required=True)
+    compose.add_argument("--strategy", choices=("routed",), required=True)
+    compose.add_argument("--output", required=True)
+    compose.add_argument("--registry")
+    compose.add_argument("--force", action="store_true")
+    compose.add_argument("--dry-run", action="store_true")
     return root
 
 
 def main(argv: list[str] | None = None) -> int:
     arguments = list(argv or [])
-    product_commands = {"package-skill", "validate-skill-package"}
+    product_commands = {"package-skill", "validate-skill-package", "compose-skills"}
     is_product_train = bool(
         arguments and arguments[0] == "train-skill" and "--output" in arguments
     )
@@ -82,6 +137,16 @@ def main(argv: list[str] | None = None) -> int:
                 version=parsed.version,
                 description=parsed.description,
                 examples=Path(parsed.examples) if parsed.examples else None,
+                composition=_package_composition(parsed),
+                force=parsed.force,
+                dry_run=parsed.dry_run,
+            )
+        elif parsed.command == "compose-skills":
+            result = compose_skill_packages(
+                skills=_csv_paths(parsed.skills),
+                strategy=parsed.strategy,
+                output=Path(parsed.output),
+                registry=Path(parsed.registry) if parsed.registry else None,
                 force=parsed.force,
                 dry_run=parsed.dry_run,
             )
