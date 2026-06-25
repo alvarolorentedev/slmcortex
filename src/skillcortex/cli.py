@@ -8,6 +8,7 @@ from skill_lattice_coder.schemas import SKILLS, TASK_TYPES
 
 from .composer import compose_skill_packages
 from .packaging import package_skill, train_skill_package, validate_skill_package
+from .runtime import SkillRuntime, load_chat_request, serve_runtime, validate_runtime_bundle
 
 
 COMPOSITION_SCOPES = ("task", "semantic_family")
@@ -15,6 +16,29 @@ COMPOSITION_SCOPES = ("task", "semantic_family")
 
 def _csv_paths(value: str) -> list[Path]:
     return [Path(item.strip()) for item in value.split(",") if item.strip()]
+
+
+def _infer_payload(parsed: argparse.Namespace) -> dict:
+    if bool(parsed.prompt) == bool(parsed.request_file):
+        raise ValueError("exactly one of --prompt or --request-file is required")
+    if parsed.request_file:
+        return load_chat_request(Path(parsed.request_file))
+    payload = {
+        "messages": ([{"role": "system", "content": parsed.system}] if parsed.system else [])
+        + [{"role": "user", "content": parsed.prompt}],
+        "task_type": parsed.task_type,
+        "semantic_family": parsed.semantic_family,
+        "skill_override": parsed.skill_override,
+        "max_tokens": parsed.max_tokens,
+        "temperature": parsed.temperature,
+    }
+    return load_chat_request_payload(payload)
+
+
+def load_chat_request_payload(payload: dict) -> dict:
+    from .runtime import normalize_chat_request
+
+    return normalize_chat_request(payload)
 
 
 def _package_composition(parsed: argparse.Namespace) -> dict | None:
@@ -90,6 +114,9 @@ def _parser() -> argparse.ArgumentParser:
     validate = commands.add_parser("validate-skill-package")
     validate.add_argument("--path", required=True)
 
+    validate_runtime = commands.add_parser("validate-runtime")
+    validate_runtime.add_argument("--runtime", required=True)
+
     compose = commands.add_parser("compose-skills")
     compose.add_argument("--skills", required=True)
     compose.add_argument("--strategy", choices=("routed",), required=True)
@@ -97,12 +124,37 @@ def _parser() -> argparse.ArgumentParser:
     compose.add_argument("--registry")
     compose.add_argument("--force", action="store_true")
     compose.add_argument("--dry-run", action="store_true")
+
+    infer = commands.add_parser("infer")
+    infer.add_argument("--runtime", required=True)
+    infer.add_argument("--prompt")
+    infer.add_argument("--request-file")
+    infer.add_argument("--system")
+    infer.add_argument("--task-type", choices=TASK_TYPES)
+    infer.add_argument("--semantic-family")
+    infer.add_argument("--skill-override")
+    infer.add_argument("--max-tokens", type=int)
+    infer.add_argument("--temperature", type=float)
+    infer.add_argument("--dry-run", action="store_true")
+
+    serve = commands.add_parser("serve")
+    serve.add_argument("--runtime", required=True)
+    serve.add_argument("--host", default="127.0.0.1")
+    serve.add_argument("--port", type=int, default=8000)
+    serve.add_argument("--dry-run", action="store_true")
     return root
 
 
 def main(argv: list[str] | None = None) -> int:
     arguments = list(argv or [])
-    product_commands = {"package-skill", "validate-skill-package", "compose-skills"}
+    product_commands = {
+        "package-skill",
+        "validate-skill-package",
+        "validate-runtime",
+        "compose-skills",
+        "infer",
+        "serve",
+    }
     is_product_train = bool(
         arguments and arguments[0] == "train-skill" and "--output" in arguments
     )
@@ -148,6 +200,26 @@ def main(argv: list[str] | None = None) -> int:
                 output=Path(parsed.output),
                 registry=Path(parsed.registry) if parsed.registry else None,
                 force=parsed.force,
+                dry_run=parsed.dry_run,
+            )
+        elif parsed.command == "validate-runtime":
+            result = validate_runtime_bundle(Path(parsed.runtime))
+        elif parsed.command == "infer":
+            payload = _infer_payload(parsed)
+            result = SkillRuntime.load(Path(parsed.runtime)).infer(
+                messages=payload["messages"],
+                task_type=payload.get("task_type"),
+                semantic_family=payload.get("semantic_family"),
+                skill_override=payload.get("skill_override"),
+                max_tokens=payload.get("max_tokens"),
+                temperature=payload.get("temperature"),
+                dry_run=parsed.dry_run,
+            )
+        elif parsed.command == "serve":
+            result = serve_runtime(
+                runtime_path=Path(parsed.runtime),
+                host=parsed.host,
+                port=parsed.port,
                 dry_run=parsed.dry_run,
             )
         else:

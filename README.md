@@ -100,6 +100,75 @@ composed without the internal registry. Official/internal registry files remain
 available as optional enrichment inputs only and are recorded as provenance,
 not source of truth.
 
+Phase 3A Runtime Core consumes the composed runtime bundle directly. The bundle
+is the deployment artifact and source of truth at runtime; registry input is
+not required.
+
+## Serve A Runtime Bundle
+
+Validate a runtime bundle before startup:
+
+```bash
+skillcortex validate-runtime --runtime runtime/debugging_bundle
+```
+
+Run local CLI inference against the same runtime service used by the server:
+
+```bash
+skillcortex infer \
+	--runtime runtime/debugging_bundle \
+	--prompt "Fix this Python traceback" \
+	--dry-run
+```
+
+You can also pass an OpenAI-style chat request file:
+
+```json
+{
+  "messages": [
+    {"role": "system", "content": "You are a debugging assistant."},
+    {"role": "user", "content": "Fix this Python traceback and failing test."}
+  ],
+  "task_type": "debugging"
+}
+```
+
+```bash
+skillcortex infer \
+	--runtime runtime/debugging_bundle \
+	--request-file request.json \
+	--dry-run
+```
+
+Start the minimal OpenAI-compatible compatibility server:
+
+```bash
+skillcortex serve --runtime runtime/debugging_bundle --host 127.0.0.1 --port 8000
+```
+
+Minimal API checks:
+
+```bash
+curl http://127.0.0.1:8000/v1/models
+
+curl http://127.0.0.1:8000/v1/chat/completions \
+	-H 'Content-Type: application/json' \
+	-d '{
+	  "model": "debugging_bundle",
+	  "messages": [
+	    {"role": "user", "content": "Fix this Python traceback"}
+	  ]
+	}'
+```
+
+Current Phase 3A limits:
+
+- non-streaming responses only
+- dry-run support for `infer` and `serve`
+- runtime bundle is the only required deployment input
+- registry enrichment remains optional provenance only
+- the OpenAI-compatible server is a thin compatibility layer over the shared runtime service
+
 ## Train
 
 ```bash

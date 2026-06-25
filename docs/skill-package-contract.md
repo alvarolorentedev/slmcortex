@@ -193,6 +193,73 @@ Optional registry enrichment:
 - does not override explicit package metadata unless a future explicit override
   mode is added
 
+## Runtime Core Usage
+
+Phase 3A Runtime Core consumes the emitted runtime bundle directly. It does not
+require registry state at startup or inference time.
+
+Validate a bundle before loading any model state:
+
+```bash
+skillcortex validate-runtime --runtime runtime/debugging_bundle
+```
+
+Run local CLI inference with a single prompt:
+
+```bash
+skillcortex infer \
+  --runtime runtime/debugging_bundle \
+  --prompt "Fix this Python traceback" \
+  --dry-run
+```
+
+Run local CLI inference with an OpenAI-style request file:
+
+```json
+{
+  "messages": [
+    {"role": "system", "content": "You are a debugging assistant."},
+    {"role": "user", "content": "Fix this Python traceback and failing test."}
+  ],
+  "task_type": "debugging"
+}
+```
+
+```bash
+skillcortex infer \
+  --runtime runtime/debugging_bundle \
+  --request-file request.json
+```
+
+Start the minimal OpenAI-compatible compatibility server:
+
+```bash
+skillcortex serve --runtime runtime/debugging_bundle --host 127.0.0.1 --port 8000
+```
+
+Minimal HTTP examples:
+
+```bash
+curl http://127.0.0.1:8000/v1/models
+
+curl http://127.0.0.1:8000/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "debugging_bundle",
+    "messages": [
+      {"role": "user", "content": "Fix this Python traceback"}
+    ]
+  }'
+```
+
+Current Phase 3A limits:
+
+- non-streaming only
+- runtime bundles remain the source of truth
+- registry enrichment is optional and non-authoritative
+- `infer` and `serve` support dry-run startup/control-flow checks
+- the compatibility server delegates to the shared runtime service layer
+
 ## Current Scope
 
 Product `train-skill` reuses the existing research training internals and is
