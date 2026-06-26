@@ -87,6 +87,27 @@ def _package_composition(parsed: argparse.Namespace) -> dict | None:
     }
 
 
+def _resolve_train_skill(parsed: argparse.Namespace) -> tuple[str, str]:
+    preset_skill = parsed.skill
+    explicit_skill_id = parsed.skill_id
+    if explicit_skill_id and preset_skill and explicit_skill_id != preset_skill:
+        raise ValueError("provide either a preset positional skill or a matching --skill-id")
+    if explicit_skill_id:
+        composition = _package_composition(parsed)
+        if composition is None:
+            raise ValueError(
+                "--allowed-task-types and --activation-scope are required when using --skill-id"
+            )
+        return "generic", explicit_skill_id
+    if preset_skill is None:
+        raise ValueError("train-skill requires either a preset skill or --skill-id")
+    if preset_skill not in SKILLS:
+        raise ValueError(
+            f"unknown built-in preset: {preset_skill}; use --skill-id for arbitrary skills"
+        )
+    return "preset", preset_skill
+
+
 def _parser() -> argparse.ArgumentParser:
     root = argparse.ArgumentParser(
         prog="skillcortex",
@@ -108,12 +129,13 @@ def _parser() -> argparse.ArgumentParser:
     train = commands.add_parser(
         "train-skill",
         **_parser_kwargs(
-            "Train one built-in research skill and package it as a Skill Cortex artifact.",
-            "skillcortex train-skill python_skill --output skills/python_skill_run --force\n"
-            "skillcortex train-skill debugging_skill --output /tmp/debugging-skill --dry-run",
+            "Train a LoRA skill from datasets and package it as a Skill Cortex artifact.",
+            "skillcortex train-skill --skill-id fastapi_contract --name \"FastAPI Contract Skill\" --train-dataset datasets/fastapi_contract/train.jsonl --eval-dataset datasets/fastapi_contract/eval.jsonl --output skills/fastapi_contract --allowed-task-types python_generation debugging --activation-scope task\n"
+            "skillcortex train-skill python_skill --output skills/python_skill_run --force",
         ),
     )
-    train.add_argument("skill", choices=SKILLS)
+    train.add_argument("skill", nargs="?")
+    train.add_argument("--skill-id")
     train.add_argument("--output", required=True)
     train.add_argument("--train-dataset", default="data/train.jsonl")
     train.add_argument("--eval-dataset", default="data/eval.jsonl")
@@ -121,6 +143,11 @@ def _parser() -> argparse.ArgumentParser:
     train.add_argument("--version", default="0.1.0")
     train.add_argument("--description")
     train.add_argument("--examples")
+    train.add_argument("--allowed-task-types", nargs="+", choices=TASK_TYPES)
+    train.add_argument("--activation-scope", choices=COMPOSITION_SCOPES)
+    train.add_argument("--semantic-families", nargs="+")
+    train.add_argument("--compatible-skills", nargs="+")
+    train.add_argument("--incompatible-skills", nargs="+")
     train.add_argument("--seed", type=int)
     train.add_argument("--force", action="store_true")
     train.add_argument("--dry-run", action="store_true")
@@ -270,8 +297,10 @@ def main(argv: list[str] | None = None) -> int:
     parsed = _parser().parse_args(arguments)
     try:
         if parsed.command == "train-skill":
+            mode, skill_id = _resolve_train_skill(parsed)
             result = train_skill_package(
-                skill=parsed.skill,
+                skill=skill_id,
+                mode=mode,
                 output=Path(parsed.output),
                 train_dataset=Path(parsed.train_dataset),
                 eval_dataset=Path(parsed.eval_dataset),
@@ -279,6 +308,7 @@ def main(argv: list[str] | None = None) -> int:
                 version=parsed.version,
                 description=parsed.description,
                 examples=Path(parsed.examples) if parsed.examples else None,
+                composition=_package_composition(parsed) if mode == "generic" else None,
                 seed=parsed.seed,
                 force=parsed.force,
                 dry_run=parsed.dry_run,

@@ -124,14 +124,54 @@ agent-trace.json
 
 For the command-by-command version of the same flow, see [examples/README.md](examples/README.md).
 
+## Optional Local Validation: Arbitrary Skill Smoke
+
+Keep the no-model demo above as the default quickstart. Use this separate flow only when you want to validate the product path for an arbitrary skill ID such as `fastapi_contract`.
+
+Default no-model arbitrary-skill smoke:
+
+```bash
+SMOKE_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/skillcortex-fastapi-contract.XXXXXX")"
+python scripts/run_skillcortex_arbitrary_skill_smoke.py --output-root "$SMOKE_ROOT"
+```
+
+What the default smoke validates:
+
+- package-first arbitrary skill metadata for `fastapi_contract`
+- compose without registry
+- runtime bundle validation
+- inference dry-run against the composed bundle
+- bounded agent dry-run against a local toy repository
+
+Opt-in real local training smoke:
+
+```bash
+SMOKE_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/skillcortex-fastapi-contract-real.XXXXXX")"
+python scripts/run_skillcortex_arbitrary_skill_smoke.py --output-root "$SMOKE_ROOT" --real-training
+```
+
+What the opt-in path additionally validates:
+
+- `skillcortex train-skill --skill-id fastapi_contract` using the tiny fixture in [examples/fastapi_contract_tiny/README.md](examples/fastapi_contract_tiny/README.md)
+- real local trainer execution
+- real local evaluator execution before packaging
+
+Local assumptions and expected runtime:
+
+- This path is Apple Silicon-first because the repository training stack is built around `mlx-lm`.
+- Expect the real-training path to be slow compared with the no-model demo. Runtime depends on local hardware, Python environment, and whether model weights must download on first use.
+- Treat the real-training path as a manual smoke check, not a normal development loop.
+- To skip it, do nothing extra: the default public quickstart and the default arbitrary-skill smoke both avoid real training.
+- This path is not part of normal CI and should not be added to default test commands.
+
 ## CLI Overview
 
 Skill Cortex ships one public CLI with command-specific help and examples.
 
 | Command | Purpose |
 | --- | --- |
-| `skillcortex train-skill` | train one built-in research skill and package it as a Skill Cortex artifact |
-| `skillcortex package-skill` | package an existing adapter into a self-describing skill artifact |
+| `skillcortex train-skill` | train a new LoRA skill from datasets and package it as a Skill Cortex artifact |
+| `skillcortex package-skill` | package an already-trained adapter into a self-describing skill artifact |
 | `skillcortex validate-skill-package` | verify package structure, fingerprints, and protected inputs |
 | `skillcortex compose-skills` | compose validated skill packages into a deterministic runtime bundle |
 | `skillcortex validate-runtime` | verify a runtime bundle before inference or serving |
@@ -143,7 +183,28 @@ Use `skillcortex <command> --help` for command-specific examples.
 
 ## Common Workflows
 
-### Create a skill package
+### Train a new skill package
+
+`train-skill` is the primary beginner path. The generic dataset contract is JSONL with one row per example using required fields `id`, `task_type`, `prompt`, and `target`. Optional fields such as `execution`, `group`, `metadata`, `skills`, and `semantic_family` are preserved when present.
+
+```bash
+skillcortex train-skill \
+  --skill-id fastapi_contract \
+  --name "FastAPI Contract Skill" \
+  --train-dataset examples/fastapi_contract_tiny/train.jsonl \
+  --eval-dataset examples/fastapi_contract_tiny/eval.jsonl \
+  --output skills/fastapi_contract \
+  --allowed-task-types python_generation debugging \
+  --activation-scope task
+```
+
+Canonical built-in skills such as `python_skill`, `debugging_skill`, and `test_generation_skill` still work as legacy preset shortcuts:
+
+```bash
+skillcortex train-skill python_skill --output /tmp/skillcortex-demo/python_skill
+```
+
+### Package an existing adapter
 
 ```bash
 skillcortex package-skill \

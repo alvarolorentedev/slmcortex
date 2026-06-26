@@ -21,6 +21,8 @@ from skill_lattice_coder.train_skill import _metadata as research_metadata
 from skill_lattice_coder.train_skill import _saved_parameter_count, build_skill_command
 from skill_lattice_coder.utils import run_fixture
 
+from .training import evaluate_product_skill_adapter, train_product_skill_to_run_directory
+
 
 REQUIRED_PACKAGE_FILES = (
     "skill.yaml",
@@ -138,6 +140,7 @@ COMPOSITION_ROUTE_TYPES = {"adapter", "base_fallback"}
 def train_skill_package(
     *,
     skill: str,
+    mode: str = "preset",
     output: Path,
     train_dataset: Path,
     eval_dataset: Path,
@@ -145,6 +148,7 @@ def train_skill_package(
     version: str = "0.1.0",
     description: str | None = None,
     examples: Path | None = None,
+    composition: dict | None = None,
     seed: int | None = None,
     force: bool = False,
     dry_run: bool = False,
@@ -176,19 +180,34 @@ def train_skill_package(
     if output.exists() and force:
         shutil.rmtree(output)
 
-    adapter_dir, metadata = _train_skill_to_run_directory(
-        skill=skill,
-        train_dataset=train_dataset,
-        run_directory=run_directory,
-        seed=seed,
-        force=force,
-    )
-    eval_summary = _evaluate_skill_adapter(
-        skill=skill,
-        dataset=eval_dataset,
-        output=run_directory / "evaluation",
-        adapter_root=run_directory / "adapters",
-    )
+    if mode == "generic":
+        adapter_dir, metadata = _train_generic_skill_to_run_directory(
+            skill_id=skill,
+            train_dataset=train_dataset,
+            run_directory=run_directory,
+            seed=seed,
+            force=force,
+        )
+        eval_summary = _evaluate_generic_skill_adapter(
+            skill_id=skill,
+            dataset=eval_dataset,
+            output=run_directory / "evaluation",
+            adapter_dir=adapter_dir,
+        )
+    else:
+        adapter_dir, metadata = _train_skill_to_run_directory(
+            skill=skill,
+            train_dataset=train_dataset,
+            run_directory=run_directory,
+            seed=seed,
+            force=force,
+        )
+        eval_summary = _evaluate_skill_adapter(
+            skill=skill,
+            dataset=eval_dataset,
+            output=run_directory / "evaluation",
+            adapter_root=run_directory / "adapters",
+        )
     protected = _freeze_protected_inputs(protected_before)
     package_result = package_skill(
         skill_id=skill,
@@ -201,6 +220,7 @@ def train_skill_package(
         version=version,
         description=resolved_description,
         examples=examples,
+        composition=composition,
         force=force,
         protected_inputs=protected,
         source_artifacts={
@@ -215,6 +235,38 @@ def train_skill_package(
     )
     package_result["run_directory"] = str(run_directory)
     return package_result
+
+
+def _train_generic_skill_to_run_directory(
+    *,
+    skill_id: str,
+    train_dataset: Path,
+    run_directory: Path,
+    seed: int | None,
+    force: bool,
+) -> tuple[Path, dict]:
+    return train_product_skill_to_run_directory(
+        skill_id=skill_id,
+        train_dataset=train_dataset,
+        run_directory=run_directory,
+        seed=seed,
+        force=force,
+    )
+
+
+def _evaluate_generic_skill_adapter(
+    *,
+    skill_id: str,
+    dataset: Path,
+    output: Path,
+    adapter_dir: Path,
+) -> Path:
+    return evaluate_product_skill_adapter(
+        skill_id=skill_id,
+        dataset=dataset,
+        output=output,
+        adapter_dir=adapter_dir,
+    )
 
 
 def package_skill(

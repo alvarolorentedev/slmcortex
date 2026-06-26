@@ -10,7 +10,7 @@ from wsgiref.simple_server import make_server
 from skill_lattice_coder.compose import temporary_composed_adapter
 from skill_lattice_coder.model_loader import generate_text, load_model
 from skill_lattice_coder.router import RuleRouter
-from skill_lattice_coder.schemas import TASK_TYPES, RouteDecision
+from skill_lattice_coder.schemas import TASK_TYPES
 
 from .composer import _package_fingerprint
 from .packaging import _read_json, _read_yaml, validate_skill_package
@@ -52,6 +52,24 @@ class RuntimeBundle:
     compatibility_report: dict[str, Any]
     budget_report: dict[str, Any]
     checksums: dict[str, Any]
+
+
+@dataclass(slots=True)
+class RuntimeRouteDecision:
+    selected_skills: list[str]
+    confidence: float
+    reason: str
+    route_type: str = "adapter"
+
+    def __post_init__(self) -> None:
+        if any(not isinstance(skill_id, str) or not skill_id.strip() for skill_id in self.selected_skills):
+            raise ValueError("selected_skills must contain non-empty skill ids")
+        if not 0 <= self.confidence <= 1:
+            raise ValueError("confidence must be between 0 and 1")
+        if not isinstance(self.reason, str) or not self.reason.strip():
+            raise ValueError("reason must be non-empty")
+        if not isinstance(self.route_type, str) or not self.route_type.strip():
+            raise ValueError("route_type must be non-empty")
 
 
 class SkillRuntime:
@@ -143,11 +161,11 @@ class SkillRuntime:
         task_type: str | None = None,
         semantic_family: str | None = None,
         skill_override: str | None = None,
-    ) -> RouteDecision:
+    ) -> RuntimeRouteDecision:
         if skill_override is not None:
             if skill_override not in self.bundle.skills:
                 raise ValueError(f"unknown runtime skill override: {skill_override}")
-            return RouteDecision(
+            return RuntimeRouteDecision(
                 [skill_override],
                 1.0,
                 f"explicit skill override selected task_type={task_type or 'python_generation'}",
@@ -157,7 +175,7 @@ class SkillRuntime:
         if resolved_task_type not in TASK_TYPES:
             raise ValueError(f"unknown task_type: {resolved_task_type}")
         route = _select_route(self.bundle.routes, resolved_task_type, semantic_family)
-        return RouteDecision(
+        return RuntimeRouteDecision(
             list(route["selected_skills"]),
             1.0,
             f"runtime bundle route {route['route_id']} selected task_type={resolved_task_type}",
