@@ -6,15 +6,18 @@ from pathlib import Path
 
 import yaml
 
-from skill_lattice_coder.compose import validate_adapter_configs, validate_adapter_metadata
-from skill_lattice_coder.schemas import TASK_TYPES
-
+from .backends.legacy import adapter_composition_backend
+from .contracts import TASK_TYPES
 from .packaging import (
     _read_json,
     _read_yaml,
     validate_composition_metadata,
     validate_skill_package,
 )
+
+
+validate_adapter_configs = adapter_composition_backend.validate_adapter_configs
+validate_adapter_metadata = adapter_composition_backend.validate_adapter_metadata
 
 
 def compose_skill_packages(

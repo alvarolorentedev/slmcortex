@@ -25,7 +25,6 @@ first.
 
 - Do not change model behavior, adapters, registry semantics, or benchmark data.
 - Keep `skillcortex` as the canonical public identity.
-- Preserve the legacy `skill-lattice` research CLI when practical.
 - Keep generated artifacts immutable.
 - Keep public documentation product-first and move research-only guidance into
 	dedicated docs.
@@ -33,7 +32,6 @@ first.
 ## Current source of truth
 
 - Public CLI entry point: `skillcortex`
-- Research CLI entry point: `skill-lattice`
 - Product runtime/package implementation: `src/skillcortex/`
 - Underlying research engine: `src/skill_lattice_coder/`
 - Skill registry: `configs/skill_registry.json`

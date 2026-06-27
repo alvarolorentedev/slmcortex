@@ -4,8 +4,8 @@ import sys
 from pathlib import Path
 from textwrap import dedent
 
-from skill_lattice_coder.cli import main as _main
-from skill_lattice_coder.schemas import SKILLS, TASK_TYPES
+from .backends.legacy import SKILLS
+from .contracts import TASK_TYPES
 
 from .composer import compose_skill_packages
 from .dataset_factory import DEFAULT_DATASET_SEED, generate_dataset_bundle
@@ -330,30 +330,12 @@ def _parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     arguments = list(sys.argv[1:] if argv is None else argv)
-    product_commands = {
-        "generate-dataset",
-        "validate-dataset",
-        "package-skill",
-        "validate-skill-package",
-        "validate-runtime",
-        "compose-skills",
-        "infer",
-        "serve",
-        "agent",
-    }
-    is_product_train = bool(
-        arguments
-        and arguments[0] == "train-skill"
-        and ("--output" in arguments or "-h" in arguments or "--help" in arguments)
-    )
     if not arguments or arguments[0] in {"-h", "--help"}:
         try:
             _parser().parse_args(arguments or ["--help"])
         except SystemExit as error:
             return int(error.code or 0)
         return 0
-    if arguments[0] not in product_commands and not is_product_train:
-        return _main(argv, prog="skillcortex")
 
     parsed = _parser().parse_args(arguments)
     try:

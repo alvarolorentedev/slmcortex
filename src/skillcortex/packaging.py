@@ -11,18 +11,33 @@ from pathlib import Path
 
 import yaml
 
-from skill_lattice_coder import __version__
-from skill_lattice_coder.config import ARTIFACT_DIR, CONFIG_DIR, ROOT, base_config, training_config
-from skill_lattice_coder.data import load_jsonl, select_for_skill, write_mlx_dataset
-from skill_lattice_coder.inference import infer
-from skill_lattice_coder.metrics import aggregate_results, extract_code, fuzzy_match, python_syntax_valid
-from skill_lattice_coder.schemas import EvaluationResult
-from skill_lattice_coder.train_skill import _metadata as research_metadata
-from skill_lattice_coder.train_skill import _saved_parameter_count, build_skill_command
-from skill_lattice_coder.utils import run_fixture
-
+from . import __version__
+from .backends.legacy import (
+    ARTIFACT_DIR,
+    CONFIG_DIR,
+    ROOT,
+    EvaluationResult,
+    base_config,
+    evaluator_backend,
+    infer,
+    load_jsonl,
+    research_metadata,
+    saved_parameter_count,
+    select_for_skill,
+    trainer_backend,
+    training_config,
+    write_mlx_dataset,
+)
 from .datasets import ensure_datasets_are_trainable
 from .training import evaluate_product_skill_adapter, train_product_skill_to_run_directory
+
+
+aggregate_results = evaluator_backend.aggregate_results
+extract_code = evaluator_backend.extract_code
+fuzzy_match = evaluator_backend.fuzzy_match
+python_syntax_valid = evaluator_backend.python_syntax_valid
+run_fixture = evaluator_backend.run_fixture
+build_skill_command = trainer_backend.build_skill_command
 
 
 REQUIRED_PACKAGE_FILES = (
@@ -662,7 +677,7 @@ def _train_skill_to_run_directory(
         seed=seed,
         iterations=training_config()["iterations"],
     )
-    metadata["trainable_parameters"] = _saved_parameter_count(adapter_directory)
+    metadata["trainable_parameters"] = saved_parameter_count(adapter_directory)
     metadata["training_command"] = command
     (adapter_directory / "metadata.json").write_text(
         json.dumps(metadata, indent=2, sort_keys=True) + "\n"

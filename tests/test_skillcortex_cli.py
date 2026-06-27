@@ -10,7 +10,7 @@ from skillcortex.dataset_factory import REQUIRED_FASTAPI_FEATURES
 
 
 def test_skillcortex_cli_alias_supports_dry_run():
-    assert main(["train-skill", "python_skill", "--dry-run"]) == 0
+    assert main(["train-skill", "python_skill", "--output", "/tmp/skillcortex-dry-run", "--dry-run"]) == 0
 
 
 def test_package_skill_and_validate_package(tmp_path):

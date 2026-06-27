@@ -287,10 +287,7 @@ Skill Cortex v0.1 is intentionally narrow.
 - Agent Runtime is a bounded local task runner, not a full IDE agent
 - Runtime bundles, not raw registry files, are the runtime source of truth
 
-## Research Surface And Backward Compatibility
-
-The underlying research CLI remains available as `skill-lattice`, but it is not
-the primary public entry point for v0.1.
+## Research Surface
 
 Research-oriented docs live here:
 

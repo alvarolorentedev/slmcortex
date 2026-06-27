@@ -1,4 +1,4 @@
 """SkillCortex product façade."""
 
-from skill_lattice_coder import __version__
+from .backends.legacy import legacy_version as __version__
 from .cli import main

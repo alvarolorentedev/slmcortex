@@ -3,14 +3,21 @@ import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-from skill_lattice_coder.config import training_config
-from skill_lattice_coder.data import dataset_hash
-from skill_lattice_coder.metrics import aggregate_results, extract_code, fuzzy_match, python_syntax_valid
-from skill_lattice_coder.model_loader import generate_text, load_model
-from skill_lattice_coder.schemas import ExecutionFixture, TASK_TYPES
-from skill_lattice_coder.train_skill import _metadata as research_metadata
-from skill_lattice_coder.train_skill import _saved_parameter_count, _training_command
-from skill_lattice_coder.utils import run_fixture
+from .backends.legacy import ExecutionFixture, evaluator_backend, model_backend, trainer_backend
+from .contracts import TASK_TYPES
+
+
+aggregate_results = evaluator_backend.aggregate_results
+extract_code = evaluator_backend.extract_code
+fuzzy_match = evaluator_backend.fuzzy_match
+generate_text = model_backend.generate_text
+load_model = model_backend.load_model
+python_syntax_valid = evaluator_backend.python_syntax_valid
+research_metadata = trainer_backend.training_metadata
+run_fixture = evaluator_backend.run_fixture
+saved_parameter_count = trainer_backend.saved_parameter_count
+training_config = trainer_backend.training_config
+training_command = trainer_backend.build_generic_training_command
 
 
 @dataclass(slots=True)
@@ -119,7 +126,7 @@ def train_product_skill_to_run_directory(
 
         shutil.rmtree(adapter_directory)
     dataset_directory = write_product_mlx_dataset(examples, training_directory)
-    command = _training_command(dataset_directory, adapter_directory, rank=8, seed=seed)
+    command = training_command(dataset_directory, adapter_directory, rank=8, seed=seed)
     start = time.perf_counter()
     import subprocess
 
@@ -132,7 +139,7 @@ def train_product_skill_to_run_directory(
         seed=seed,
         iterations=training_config()["iterations"],
     )
-    metadata["trainable_parameters"] = _saved_parameter_count(adapter_directory)
+    metadata["trainable_parameters"] = saved_parameter_count(adapter_directory)
     metadata["training_command"] = command
     (adapter_directory / "metadata.json").write_text(
         json.dumps(metadata, indent=2, sort_keys=True) + "\n"
@@ -255,7 +262,7 @@ def _generate_for_example(
         "generated_tokens": generated_tokens,
         "peak_memory_bytes": int(mx.get_peak_memory()) if mx else None,
         "active_adapter_parameters": (
-            _saved_parameter_count(adapter_dir) if adapter_dir is not None else 0
+            saved_parameter_count(adapter_dir) if adapter_dir is not None else 0
         ),
     }
 

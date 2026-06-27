@@ -7,13 +7,15 @@ from pathlib import Path
 from typing import Any
 from wsgiref.simple_server import make_server
 
-from skill_lattice_coder.compose import temporary_composed_adapter
-from skill_lattice_coder.model_loader import generate_text, load_model
-from skill_lattice_coder.router import RuleRouter
-from skill_lattice_coder.schemas import TASK_TYPES
-
+from .backends.legacy import adapter_composition_backend, model_backend
+from .contracts import TASK_TYPES
 from .composer import _package_fingerprint
 from .packaging import _read_json, _read_yaml, validate_skill_package
+
+
+temporary_composed_adapter = adapter_composition_backend.temporary_composed_adapter
+generate_text = model_backend.generate_text
+load_model = model_backend.load_model
 
 
 REQUIRED_RUNTIME_FILES = (
@@ -384,7 +386,7 @@ def normalize_chat_request(payload: dict[str, Any], *, runtime_name: str | None 
 
 def _infer_task_type(messages: list[dict[str, str]]) -> str:
     user_text = "\n".join(message["content"] for message in messages if message["role"] == "user")
-    selected = RuleRouter().route(user_text).selected_skills
+    selected = model_backend.route_text(user_text)
     if "debugging_skill" in selected:
         return "debugging"
     if "test_generation_skill" in selected:
