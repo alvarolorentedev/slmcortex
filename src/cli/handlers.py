@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Callable
 
 from ..agent import run_agent
+from ..catalog import route_task
 from ..composer import compose_skill_packages
 from ..dataset_factory import generate_dataset_bundle
 from ..datasets import validate_dataset_command
@@ -90,6 +91,14 @@ def execute_command(
             force=parsed.force,
             dry_run=parsed.dry_run,
         )
+    if parsed.command == "route":
+        return route_task(
+            skills_dir=Path(parsed.skills_dir),
+            repo=Path(parsed.repo),
+            task=parsed.task,
+            explain=parsed.explain,
+            current_base_model=parsed.base_model,
+        )
     if parsed.command == "validate-runtime":
         return validate_runtime_bundle(Path(parsed.runtime))
     if parsed.command == "infer":
@@ -113,6 +122,24 @@ def execute_command(
     if parsed.command == "agent":
         if parsed.agent_command != "run":
             raise ValueError(f"unknown agent command: {parsed.agent_command}")
+        if bool(parsed.runtime) == bool(parsed.skills_dir):
+            raise ValueError("agent run requires exactly one of --runtime or --skills-dir")
+        if parsed.skills_dir:
+            if not parsed.dry_run:
+                raise ValueError(
+                    "agent run --skills-dir is route-only in v1; pass --dry-run or compose/pass an explicit runtime for execution"
+                )
+            tasks = collect_agent_tasks(parsed.task)
+            if not tasks:
+                raise ValueError("agent run --skills-dir --dry-run requires --task")
+            if len(tasks) != 1:
+                raise ValueError("agent run --skills-dir --dry-run accepts one --task")
+            return route_task(
+                skills_dir=Path(parsed.skills_dir),
+                repo=Path(parsed.repo),
+                task=tasks[0],
+                explain=True,
+            )
         tasks = collect_agent_tasks(parsed.task)
         task_provider = None if tasks else stream_agent_tasks()
         return run_agent(

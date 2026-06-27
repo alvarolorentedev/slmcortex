@@ -173,6 +173,7 @@ Skill Cortex ships one public CLI with command-specific help and examples.
 | `skillcortex package-skill` | package an already-trained adapter into a self-describing skill artifact |
 | `skillcortex validate-skill-package` | verify package structure, fingerprints, and protected inputs |
 | `skillcortex compose-skills` | compose validated skill packages into a deterministic runtime bundle |
+| `skillcortex route` | route a task against discovered skill packages without loading adapters |
 | `skillcortex validate-runtime` | verify a runtime bundle before inference or serving |
 | `skillcortex infer` | run local inference or dry-run routing against a runtime bundle |
 | `skillcortex serve` | expose the minimal OpenAI-compatible compatibility server |
@@ -237,6 +238,28 @@ Canonical built-in skills such as `python_skill`, `debugging_skill`, and `test_g
 skillcortex train-skill python_skill --output /tmp/skillcortex-demo/python_skill
 ```
 
+### Discover and route skills without a runtime
+
+Auto-discovery mode scans skill folders for `skill.yaml` and optional routing
+metadata. It is deterministic and route-only; it does not load adapter weights.
+`task_type` is only a compatibility hint in this mode.
+
+```bash
+skillcortex route \
+  --skills-dir skills \
+  --repo . \
+  --task "Create a FastAPI endpoint with Pydantic validation" \
+  --explain
+```
+
+```bash
+skillcortex agent run \
+  --skills-dir skills \
+  --repo . \
+  --task "Create a FastAPI endpoint with Pydantic validation" \
+  --dry-run
+```
+
 ### Package an existing adapter
 
 ```bash
@@ -276,6 +299,8 @@ skillcortex serve --runtime /tmp/skillcortex-demo/runtime --host 127.0.0.1 --por
 ```
 
 ### Run the bounded local agent
+
+Execution mode still uses an explicit composed runtime bundle:
 
 ```bash
 skillcortex agent run \

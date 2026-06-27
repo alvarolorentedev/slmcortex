@@ -20,6 +20,7 @@ def test_src_tree_is_flat_product_layout():
     }
     assert entries == {
         "agent",
+        "catalog.py",
         "cli",
         "composer",
         "contracts.py",
