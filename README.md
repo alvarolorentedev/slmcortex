@@ -51,6 +51,8 @@ flowchart TD
 
 Deep-dive docs:
 
+- [User Quickstart](docs/user-guide/quickstart.md)
+- [Command Reference](docs/user-guide/command-reference.md)
 - [Skill Factory](docs/architecture/skill-factory.md)
 - [Skill Composer](docs/architecture/skill-composer.md)
 - [Runtime Core](docs/architecture/runtime-core.md)
@@ -160,6 +162,21 @@ Local assumptions and expected runtime:
 - Treat the real-training path as a manual smoke check, not a normal development loop.
 - To skip it, do nothing extra: the default public quickstart and the default arbitrary-skill smoke both avoid real training.
 - This path is not part of normal CI and should not be added to default test commands.
+
+Dynamic adaptive prototype smoke:
+
+```bash
+SMOKE_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/skillcortex-dynamic.XXXXXX")"
+python scripts/run_dynamic_adaptive_smoke.py --output-root "$SMOKE_ROOT"
+python scripts/benchmark_dynamic_router.py --skills-dir skills
+```
+
+Manual real path, which may download models/LoRAs and run local training:
+
+```bash
+SKILLCORTEX_BASE_CONFIG=configs/prototype.yaml \
+python scripts/run_dynamic_adaptive_smoke.py --real --output-root "$SMOKE_ROOT"
+```
 
 ## CLI Overview
 

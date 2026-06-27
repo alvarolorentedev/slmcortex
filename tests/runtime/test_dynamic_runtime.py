@@ -128,6 +128,51 @@ def test_dynamic_infer_dry_run_selects_remote_catalog_match(tmp_path, monkeypatc
     assert output["remote_loras"] == ["hf://owner/fastapi"]
     assert output["route_branch"] == "remote_lora"
     assert output["route_trace"]["final_selected_skills"] == ["fastapi_remote"]
+    assert output["adaptation_summary"]["branch"] == "remote_lora"
+    assert output["adaptation_summary"]["fetched_sources"] == ["hf://owner/fastapi"]
+
+
+def test_dynamic_infer_dry_run_matches_richer_remote_catalog_fields(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(
+        "skillcortex.runtime.dynamic.base_config",
+        lambda: {
+            "model": "mlx-test-base",
+            "default_runtime_model": "mlx-test-base",
+            "remote_lora_catalog": [
+                {
+                    "skill_id": "fastapi_remote",
+                    "source": "hf://owner/fastapi",
+                    "name": "FastAPI Contract Remote",
+                    "description": "Pydantic response model validation",
+                    "task_types": ["python_generation"],
+                    "semantic_families": ["fastapi_contract"],
+                }
+            ],
+        },
+    )
+    runtime = DynamicRuntime.load(tmp_path / "skills", allow_remote_loras=True)
+
+    def fake_resolve(source, skill_id, name=None):
+        _skill(tmp_path, skill_id, description="FastAPI remote adapter", capabilities=["fastapi"])
+        runtime.registry.reload()
+        return runtime.registry.local[skill_id]
+
+    monkeypatch.setattr(runtime.registry, "resolve_remote", fake_resolve)
+    monkeypatch.setattr("skillcortex.runtime.dynamic.DynamicRuntime.load", lambda *args, **kwargs: runtime)
+
+    assert main([
+        "infer",
+        "--skills-dir",
+        str(tmp_path / "skills"),
+        "--prompt",
+        "Fix Pydantic response model validation",
+        "--allow-remote-loras",
+        "--dry-run",
+    ]) == 0
+
+    output = json.loads(capsys.readouterr().out)
+    assert output["selected_skills"] == ["fastapi_remote"]
+    assert output["route_branch"] == "remote_lora"
 
 
 def test_dynamic_router_rejects_unknown_skill(tmp_path):
@@ -247,6 +292,7 @@ def test_dynamic_router_trains_plasticity_lora_when_enabled(tmp_path, monkeypatc
 
     def fake_train_skill_package(**kwargs):
         calls.append(kwargs)
+        calls.append({"rows": [json.loads(line) for line in kwargs["train_dataset"].read_text().splitlines()]})
         eval_summary = tmp_path / "plasticity-eval.json"
         eval_summary.write_text(json.dumps({"modes": {}, "tasks": {}}) + "\n")
         package_skill(
@@ -282,6 +328,16 @@ def test_dynamic_router_trains_plasticity_lora_when_enabled(tmp_path, monkeypatc
     assert decision.selected_skills == [expected_skill]
     assert calls[0]["skill"] == expected_skill
     assert calls[0]["mode"] == "generic"
+    assert calls[1]["rows"] == [
+        {
+            "id": expected_skill,
+            "task_type": "python_generation",
+            "prompt": prompt,
+            "target": "Adapt to this task.",
+            "semantic_family": "fastapi",
+            "metadata": {"source": "dynamic_plasticity"},
+        }
+    ]
     assert (tmp_path / "skills" / expected_skill / "skill.yaml").exists()
 
 
@@ -423,6 +479,7 @@ def test_dynamic_infer_falls_back_to_base_when_adaptation_fails(tmp_path, monkey
     assert result["selected_skills"] == []
     assert result["route_branch"] == "base_fallback"
     assert result["adaptation_error"] == "fetch failed"
+    assert result["adaptation_summary"]["fallback_error"] == "fetch failed"
     assert result["generation"] == "base answer"
 
 
@@ -486,6 +543,7 @@ def test_dynamic_infer_trains_reloads_and_reuses_plasticity_lora(tmp_path, monke
     assert first["generation"] == "adapter answer"
     assert first["route_branch"] == "plasticity_train"
     assert first["selected_skills"] == [expected_skill]
+    assert first["adaptation_summary"]["trained_skill"] == expected_skill
     assert second["selected_skills"] == [expected_skill]
     assert len(calls) == 1
     assert len(loaded) == 1

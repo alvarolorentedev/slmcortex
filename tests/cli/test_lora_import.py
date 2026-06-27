@@ -52,6 +52,10 @@ def test_import_lora_from_huggingface_source_uses_cache_and_provenance(tmp_path,
     assert source["files"]["adapters.safetensors"]["sha256"] == sha256(tmp_path / "cache" / "hf" / "owner" / "repo" / "main" / "adapters.safetensors")
     assert (tmp_path / "fastapi_skill" / "skill.yaml").exists()
     assert (tmp_path / "fastapi_skill" / "adapter" / "adapters.safetensors").exists()
+    metadata = json.loads((tmp_path / "fastapi_skill" / "metadata.json").read_text())
+    assert metadata["source_artifacts"]["source"] == "hf://owner/repo"
+    assert metadata["source_artifacts"]["cache_path"].endswith("/cache/hf/owner/repo/main")
+    assert metadata["datasets"]["train"]["role"] == "packaging_reference"
 
 
 def test_import_lora_reuses_cache_without_force(tmp_path, monkeypatch, capsys):

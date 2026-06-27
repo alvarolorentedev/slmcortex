@@ -56,18 +56,22 @@ def _package(output_root: Path, skill_id: str, description: str, output: Path | 
     return output
 
 
-def _mock_runtime(output_root: Path):
+def _mock_runtime(output_root: Path, failure_mode: str | None = None):
     from skillcortex.runtime.dynamic import DynamicRuntime
 
     _package(output_root, "fastapi_skill", "FastAPI endpoint validation")
     runtime = DynamicRuntime.load(output_root / "skills", allow_remote_loras=True)
 
     def fake_resolve(source, skill_id, name=None):
+        if failure_mode == "remote-download":
+            raise ValueError("mock remote download failed")
         _package(output_root, skill_id, f"Imported mock LoRA from {source}")
         runtime.registry.reload()
         return runtime.registry.local[skill_id]
 
     def fake_train(**kwargs):
+        if failure_mode == "training":
+            raise ValueError("mock training failed")
         _package(output_root, kwargs["skill"], "Mock trained plasticity LoRA", output=kwargs["output"])
         return {"status": "complete", "skill_id": kwargs["skill"]}
 
@@ -103,7 +107,11 @@ def _write_mock_config(output_root: Path) -> Path:
                 "remote_lora_catalog:",
                 "  - skill_id: sql_remote",
                 "    source: hf://owner/sql",
+                "    name: SQL Remote",
+                "    description: SQL query tuning",
                 "    cues: [sql]",
+                "    task_types: [python_generation]",
+                "    semantic_families: [sql]",
                 "max_tokens: 8",
                 "temperature: 0.0",
                 "",
@@ -158,21 +166,19 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--output-root")
     parser.add_argument("--real", action="store_true", help="Use real runtime fetch/train/model paths.")
     parser.add_argument("--config", default=str(ROOT / "configs" / "prototype.yaml"))
-    parser.add_argument("--remote-source", help="HF LoRA source for --real, e.g. hf://owner/repo[@revision].")
+    parser.add_argument("--remote-source", help=argparse.SUPPRESS)
+    parser.add_argument("--failure-mode", choices=("remote-download", "training"))
     parsed = parser.parse_args(argv)
 
     output_root = Path(parsed.output_root or tempfile.mkdtemp(prefix="skillcortex-dynamic-smoke-")).resolve()
     output_root.mkdir(parents=True, exist_ok=True)
-    if parsed.real and parsed.remote_source:
-        os.environ["SKILLCORTEX_BASE_CONFIG"] = str(_write_real_config(output_root, parsed.remote_source))
-    else:
-        os.environ["SKILLCORTEX_BASE_CONFIG"] = parsed.config if parsed.real else str(_write_mock_config(output_root))
+    os.environ["SKILLCORTEX_BASE_CONFIG"] = parsed.config if parsed.real else str(_write_mock_config(output_root))
 
     if parsed.real:
         _package(output_root, "fastapi_skill", "FastAPI endpoint validation")
         runtime = DynamicRuntime.load(output_root / "skills", allow_remote_loras=True)
     else:
-        runtime = _mock_runtime(output_root)
+        runtime = _mock_runtime(output_root, parsed.failure_mode)
 
     def router(messages, skills):
         text = messages[-1]["content"].lower()

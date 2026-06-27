@@ -111,8 +111,13 @@ def build_manifests(
                 "path": str(train_dataset),
                 "sha256": train_dataset_hash,
                 "example_count": adapter_metadata.get("dataset_size"),
+                **({"role": "packaging_reference"} if (source_artifacts or {}).get("source") else {}),
             },
-            "eval": {"path": str(eval_dataset), "sha256": eval_dataset_hash},
+            "eval": {
+                "path": str(eval_dataset),
+                "sha256": eval_dataset_hash,
+                **({"role": "packaging_reference"} if (source_artifacts or {}).get("source") else {}),
+            },
         },
         "evaluation": {
             "summary_path": "eval.json",

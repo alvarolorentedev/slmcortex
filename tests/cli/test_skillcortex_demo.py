@@ -138,3 +138,26 @@ def test_dynamic_adaptive_smoke_script_runs_mock_loop(tmp_path):
     }
     assert output_root.joinpath("skills", "fastapi_skill", "skill.yaml").exists()
     assert output_root.joinpath("skills", "sql_remote", "skill.yaml").exists()
+
+
+def test_dynamic_adaptive_smoke_script_exercises_failure_modes(tmp_path):
+    for mode in ("remote-download", "training"):
+        completed = subprocess.run(
+            [
+                sys.executable,
+                "scripts/run_dynamic_adaptive_smoke.py",
+                "--output-root",
+                str(tmp_path / mode),
+                "--failure-mode",
+                mode,
+            ],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+        )
+
+        assert completed.returncode == 0, completed.stderr
+        summary = json.loads(completed.stdout)
+        failed = summary["results"]["remote" if mode == "remote-download" else "plasticity"]
+        assert failed["route_branch"] == "base_fallback"
+        assert failed["adaptation_error"]

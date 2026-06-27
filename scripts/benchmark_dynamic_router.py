@@ -1,0 +1,96 @@
+import argparse
+import json
+import os
+import tempfile
+from collections import Counter
+from pathlib import Path
+
+from skillcortex.runtime.dynamic import DynamicRouteDecision, DynamicRuntime
+
+
+CASES = [
+    ("Fix a FastAPI validation bug", "local_lora"),
+    ("Refactor a FastAPI endpoint", "local_lora"),
+    ("Polish a coding helper", "remote_lora"),
+    ("Improve a coding workflow", "remote_lora"),
+    ("train a custom adapter for a new task", "plasticity_train"),
+    ("Train on this unfamiliar local workflow", "plasticity_train"),
+    ("Summarize project notes", "base_fallback"),
+    ("Summarize release notes", "base_fallback"),
+]
+
+
+def run_benchmark(skills_dir: Path) -> dict:
+    os.environ.setdefault("SKILLCORTEX_BASE_CONFIG", str(Path("configs/prototype.yaml").resolve()))
+    with tempfile.TemporaryDirectory(prefix="skillcortex-router-bench-") as directory:
+        benchmark_skills = skills_dir if any(skills_dir.glob("*/skill.yaml")) else _demo_skills(Path(directory))
+        runtime = DynamicRuntime.load(benchmark_skills, allow_remote_loras=False)
+        rows = []
+        for prompt, expected in CASES:
+            decision = _decision(runtime, prompt)
+            actual = runtime._route_branch(decision)
+            rows.append({"prompt": prompt, "expected": expected, "actual": actual, "passed": actual == expected})
+    return {
+        "total": len(rows),
+        "passed": sum(row["passed"] for row in rows),
+        "accuracy": sum(row["passed"] for row in rows) / len(rows),
+        "expected": dict(sorted(Counter(row["expected"] for row in rows).items())),
+        "actual": dict(sorted(Counter(row["actual"] for row in rows).items())),
+        "cases": rows,
+    }
+
+
+def _demo_skills(root: Path) -> Path:
+    from skillcortex.packaging import package_skill
+
+    eval_summary = root / "eval.json"
+    eval_summary.write_text(json.dumps({"modes": {}, "tasks": {}}) + "\n")
+    package_skill(
+        skill_id="fastapi_skill",
+        name="FastAPI Skill",
+        adapter_dir=Path("artifacts/adapters/python_skill"),
+        output=root / "skills" / "fastapi_skill",
+        train_dataset=Path("data/train.jsonl"),
+        eval_dataset=Path("data/eval.jsonl"),
+        eval_summary=eval_summary,
+        version="0.1.0",
+        description="FastAPI endpoint validation",
+        composition={
+            "capabilities": {"allowed_task_types": ["python_generation"]},
+            "activation": {
+                "default_route_type": "adapter",
+                "scope": "task",
+                "semantic_families": ["fastapi"],
+            },
+            "compatibility": {"compatible_skills": [], "incompatible_skills": []},
+            "routing": {"tasks": {}},
+        },
+        force=True,
+    )
+    return root / "skills"
+
+
+def _decision(runtime: DynamicRuntime, prompt: str) -> DynamicRouteDecision:
+    if "train" in prompt.lower():
+        return DynamicRouteDecision(
+            base_model="benchmark",
+            selected_skills=[],
+            remote_loras=[],
+            task_type="python_generation",
+            semantic_family=None,
+            train_new_lora=True,
+            reason="benchmark training branch",
+        )
+    return runtime._rule_router([{"role": "user", "content": prompt}], list(runtime.skills.values()))
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Benchmark dynamic router branch choices without downloads or training.")
+    parser.add_argument("--skills-dir", default="skills")
+    parsed = parser.parse_args(argv)
+    print(json.dumps(run_benchmark(Path(parsed.skills_dir)), indent=2, sort_keys=True))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -126,7 +126,7 @@ def import_lora(
             version=version,
             description=description or f"Imported LoRA package from {source}.",
             force=force,
-            source_artifacts={"source": source},
+            source_artifacts={"source": source, "cache_path": str(cached)},
         )
     result["source"] = source
     result["cache_path"] = str(cached)

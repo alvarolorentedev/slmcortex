@@ -92,7 +92,7 @@ class DynamicRuntime:
             max_tokens=max_tokens,
             temperature=temperature,
         )
-        result = self._result("complete", decision)
+        result = self._result("complete", decision, adaptation_error=adaptation_error)
         if adaptation_error:
             result["adaptation_error"] = adaptation_error
         result.update(
@@ -194,11 +194,14 @@ class DynamicRuntime:
             cues = entry.get("cues") or []
             if not isinstance(skill_id, str) or not isinstance(source, str):
                 continue
+            fields = [entry.get("name"), entry.get("description"), *cues]
+            fields.extend(entry.get("task_types") or [])
+            fields.extend(entry.get("semantic_families") or [])
             score = sum(
                 1
-                for cue in cues
-                if isinstance(cue, str)
-                and any(word in cue.lower() or cue.lower() in word for word in words)
+                for field in fields
+                if isinstance(field, str)
+                and any(word in field.lower() or field.lower() in word for word in words)
             )
             if score:
                 scored.append((score, skill_id, source))
@@ -221,12 +224,20 @@ class DynamicRuntime:
         config = base_config()
         if not config.get("training_enabled"):
             raise ValueError("dynamic plasticity training is disabled")
-        train_dataset = config.get("plasticity_train_dataset")
         publish_dir = config.get("plasticity_publish_dir")
-        if not train_dataset or not publish_dir:
-            raise ValueError("dynamic plasticity training requires plasticity_train_dataset and plasticity_publish_dir")
+        if not publish_dir:
+            raise ValueError("dynamic plasticity training requires plasticity_publish_dir")
         text = "\n".join(message["content"] for message in messages if message["role"] == "user")
+        train_row = {
+            "id": "",
+            "task_type": decision.task_type or "python_generation",
+            "prompt": text,
+            "target": "Adapt to this task.",
+            "semantic_family": decision.semantic_family,
+            "metadata": {"source": "dynamic_plasticity"},
+        }
         skill_id = f"plasticity_{hashlib.sha256(text.encode()).hexdigest()[:8]}"
+        train_row["id"] = skill_id
         if skill_id in self.skills:
             return skill_id
         output = Path(publish_dir) / skill_id
@@ -240,15 +251,23 @@ class DynamicRuntime:
             existing = sum(1 for existing_id in self.skills if existing_id.startswith("plasticity_"))
             if existing >= int(limit):
                 raise ValueError("plasticity skill cap reached")
-        eval_dataset = config.get("plasticity_eval_dataset") or train_dataset
+        fallback_train_dataset = config.get("plasticity_train_dataset")
         with tempfile.TemporaryDirectory(prefix=f"skillcortex-{skill_id}-publish-") as directory:
+            train_dataset = Path(directory) / "task-train.jsonl"
+            if text.strip():
+                train_dataset.write_text(json.dumps(train_row, sort_keys=True) + "\n")
+            elif fallback_train_dataset:
+                train_dataset = Path(fallback_train_dataset)
+            else:
+                raise ValueError("dynamic plasticity training requires a user prompt")
+            eval_dataset = Path(config.get("plasticity_eval_dataset") or train_dataset)
             staging = Path(directory) / skill_id
             train_skill_package(
                 skill=skill_id,
                 mode="generic",
                 output=staging,
-                train_dataset=Path(train_dataset),
-                eval_dataset=Path(eval_dataset),
+                train_dataset=train_dataset,
+                eval_dataset=eval_dataset,
                 name=skill_id.replace("_", " ").title(),
                 version="0.1.0",
                 description=f"On-demand plasticity LoRA for {decision.reason}.",
@@ -333,7 +352,13 @@ class DynamicRuntime:
                 reason="router fallback",
             )
 
-    def _result(self, status: str, decision: DynamicRouteDecision) -> dict:
+    def _result(
+        self,
+        status: str,
+        decision: DynamicRouteDecision,
+        *,
+        adaptation_error: str | None = None,
+    ) -> dict:
         active = [
             self.skills[skill_id]
             for skill_id in decision.selected_skills
@@ -358,6 +383,14 @@ class DynamicRuntime:
                     "reason": decision.reason,
                 },
                 "branch": branch,
+                "final_selected_skills": decision.selected_skills,
+            },
+            "adaptation_summary": {
+                "branch": branch,
+                "reason": decision.reason,
+                "fetched_sources": decision.remote_loras,
+                "trained_skill": decision.selected_skills[0] if decision.train_new_lora and decision.selected_skills else None,
+                "fallback_error": adaptation_error,
                 "final_selected_skills": decision.selected_skills,
             },
             "active_adapter_count": len(active),

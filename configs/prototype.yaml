@@ -11,8 +11,15 @@ remote_lora_eval_dataset: data/eval.jsonl
 training_enabled: true
 plasticity_train_dataset: data/train.jsonl
 plasticity_eval_dataset: data/eval.jsonl
-plasticity_publish_dir: skills
+plasticity_publish_dir: .skillcortex/prototype-skills
 max_plasticity_loras: 8
-remote_lora_catalog: []
+remote_lora_catalog:
+  - skill_id: codewraith_remote
+    source: hf://slenk/codewraith-lora-8b
+    name: Codewraith Remote
+    description: Public code-generation LoRA for code editing and implementation tasks.
+    cues: [code, coding, implementation, refactor, python]
+    task_types: [python_generation]
+    semantic_families: [code_generation, refactor]
 max_tokens: 256
 temperature: 0.0
