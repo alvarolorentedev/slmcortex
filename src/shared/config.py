@@ -5,7 +5,7 @@ from pathlib import Path
 from .io import read_yaml
 
 
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = Path(__file__).resolve().parents[2]
 CONFIG_DIR = ROOT / "configs"
 DATA_DIR = ROOT / "data"
 ARTIFACT_DIR = ROOT / "artifacts"

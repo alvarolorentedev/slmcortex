@@ -8,9 +8,9 @@ from pathlib import Path
 
 from ..runtime.generation import infer
 from ..shared.config import training_config
-from ..training import evaluate_product_skill_adapter, train_product_skill_to_run_directory
 from ..training.commands import build_skill_command, saved_parameter_count, training_metadata
 from ..training.data import load_jsonl, select_for_skill, write_mlx_dataset
+from ..training.evaluation import evaluate_product_skill_adapter, train_product_skill_to_run_directory
 from ..training.metrics import aggregate_results, extract_code, fuzzy_match, python_syntax_valid
 from ..training.execution import run_fixture
 from ..training.types import EvaluationResult

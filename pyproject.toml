@@ -33,11 +33,13 @@ test = [
 ]
 
 [project.scripts]
-skillcortex = "skillcortex.cli:main"
+skillcortex = "skillcortex:main"
+
+[tool.setuptools]
+py-modules = ["skillcortex", "contracts"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["skillcortex*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

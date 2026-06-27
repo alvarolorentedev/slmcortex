@@ -5,7 +5,7 @@ Public documentation and runtime behavior should stay product-first.
 
 ## Canonical boundaries
 
-- `src/skillcortex/`: public product CLI, package/runtime tooling, and bounded
+- `src/`: public product CLI, package/runtime tooling, and bounded
 	agent surface.
 - `configs/`: runtime defaults and governed skill registry inputs.
 - `data/`: current canonical datasets and benchmarks.
@@ -27,7 +27,7 @@ Public documentation and runtime behavior should stay product-first.
 ## Current source of truth
 
 - Public CLI entry point: `skillcortex`
-- Product runtime/package implementation: `src/skillcortex/`
+- Product runtime/package implementation: `src/`
 - Skill registry: `configs/skill_registry.json`
 - Skill metadata: `configs/skills.yaml`
 - Skill mirror: `skills/skill_registry.json`, `skills/skills.yaml`
