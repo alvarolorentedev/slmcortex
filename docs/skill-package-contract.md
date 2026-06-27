@@ -40,6 +40,16 @@ skillcortex compose-skills \
   --output runtime/debugging_bundle
 ```
 
+Route discovered packages without composing or loading adapters:
+
+```bash
+skillcortex route \
+  --skills-dir skills \
+  --repo . \
+  --task "Create a FastAPI endpoint with Pydantic validation" \
+  --explain
+```
+
 ## Expected Output
 
 ```text
@@ -64,6 +74,35 @@ composition.
 Product `train-skill` also creates an isolated sibling run directory named
 `.PACKAGE_NAME.run` containing the temporary training data, adapter output, and
 evaluation summary used to build the final package.
+
+## Capability Routing Metadata
+
+`skillcortex route` discovers direct child folders under `--skills-dir`. A
+discoverable package only needs `skill.yaml`; `routing_card.json`,
+`eval_summary.json`, `examples.jsonl`, and `adapter/` are optional. Discovery
+does not load adapter weights.
+
+Capability routing reads these optional `skill.yaml` fields:
+
+```yaml
+skill_id: fastapi_contract
+name: FastAPI Contract Skill
+description: FastAPI endpoints with Pydantic validation.
+capabilities:
+  - fastapi
+  - pydantic
+activation_cues:
+  - FastAPI
+  - Pydantic
+avoid_when:
+  - frontend-only task
+task_type_hint: api_generation
+base_model: optional-base-model-id
+adapter_path: adapter
+```
+
+Older `task_type` metadata is accepted as `task_type_hint`. It is only a small
+compatibility bonus and is never required for selection.
 
 ## Package-First Composition Metadata
 

@@ -34,6 +34,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_validate_skill_package_parser(commands)
     _add_validate_runtime_parser(commands)
     _add_compose_skills_parser(commands)
+    _add_route_parser(commands)
     _add_infer_parser(commands)
     _add_serve_parser(commands)
     _add_agent_parser(commands)
@@ -168,6 +169,21 @@ def _add_compose_skills_parser(commands) -> None:
     compose.add_argument("--dry-run", action="store_true")
 
 
+def _add_route_parser(commands) -> None:
+    route = commands.add_parser(
+        "route",
+        **parser_kwargs(
+            "Route a task against discovered skill packages without loading adapters.",
+            "skillcortex route --skills-dir skills --repo . --task \"Create a FastAPI endpoint\" --explain",
+        ),
+    )
+    route.add_argument("--skills-dir", required=True)
+    route.add_argument("--repo", required=True)
+    route.add_argument("--task", required=True)
+    route.add_argument("--base-model")
+    route.add_argument("--explain", action="store_true")
+
+
 def _add_infer_parser(commands) -> None:
     infer = commands.add_parser(
         "infer",
@@ -222,7 +238,8 @@ def _add_agent_parser(commands) -> None:
             "skillcortex agent run --runtime /tmp/skillcortex-demo/runtime --repo /tmp/skillcortex-demo/toy-repo --task \"Fix the failing answer implementation.\" --write-mode confirm --trace-out /tmp/skillcortex-demo/agent-trace.json",
         ),
     )
-    agent_run.add_argument("--runtime", required=True)
+    agent_run.add_argument("--runtime")
+    agent_run.add_argument("--skills-dir")
     agent_run.add_argument("--repo", required=True)
     agent_run.add_argument(
         "--task",
