@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from .io import read_yaml
@@ -12,7 +13,7 @@ ARTIFACT_DIR = ROOT / "artifacts"
 
 
 def base_config() -> dict:
-    return read_yaml(CONFIG_DIR / "base.yaml")
+    return read_yaml(Path(os.environ.get("SKILLCORTEX_BASE_CONFIG") or CONFIG_DIR / "base.yaml"))
 
 
 def training_config() -> dict:

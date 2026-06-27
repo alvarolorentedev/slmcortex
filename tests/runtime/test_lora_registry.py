@@ -65,6 +65,30 @@ def test_registry_resolves_remote_lora_when_allowed(tmp_path, monkeypatch):
     assert resolved.package_path == imported.resolve()
 
 
+def test_registry_uses_configured_remote_import_datasets(tmp_path, monkeypatch):
+    imported = _package(tmp_path, "remote_skill")
+    calls = []
+    monkeypatch.setattr(
+        "skillcortex.runtime.registry.base_config",
+        lambda: {
+            "remote_lora_train_dataset": "data/import-train.jsonl",
+            "remote_lora_eval_dataset": "data/import-eval.jsonl",
+        },
+    )
+
+    def fake_import_lora(**kwargs):
+        calls.append(kwargs)
+        return {"status": "complete", "output": str(imported), "skill_id": kwargs["skill_id"]}
+
+    monkeypatch.setattr("skillcortex.runtime.registry.import_lora", fake_import_lora)
+    registry = AdapterRegistry.load(tmp_path / "skills", allow_remote=True)
+
+    registry.resolve_remote("hf://owner/repo", "remote_skill")
+
+    assert calls[0]["train_dataset"] == Path("data/import-train.jsonl")
+    assert calls[0]["eval_dataset"] == Path("data/import-eval.jsonl")
+
+
 def test_registry_blocks_remote_lora_by_default(tmp_path):
     registry = AdapterRegistry.load(tmp_path / "skills")
 

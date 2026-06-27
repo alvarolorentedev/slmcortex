@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import re
+import shutil
+import tempfile
 import threading
 from contextlib import nullcontext
 from dataclasses import dataclass
@@ -9,6 +12,7 @@ from pathlib import Path
 from typing import Callable
 
 from ..composer.adapters import temporary_composed_adapter
+from ..packaging import train_skill_package, validate_skill_package
 from ..shared.config import base_config
 from .generation import generate_text, load_model
 from .request import normalize_messages
@@ -67,10 +71,17 @@ class DynamicRuntime:
         dry_run: bool = False,
     ) -> dict:
         resolved_messages = normalize_messages(prompt=prompt, system=system, messages=messages)
-        decision = self.route(
-            resolved_messages,
-            router=None if dry_run else self._router_model,
-        )
+        adaptation_error = None
+        try:
+            decision = self.route(
+                resolved_messages,
+                router=None if dry_run else self._router_model,
+            )
+        except ValueError as error:
+            if dry_run:
+                raise
+            adaptation_error = str(error)
+            decision = self._base_fallback_decision(adaptation_error)
         if dry_run:
             return self._result("dry-run", decision)
         model, tokenizer = self._get_model(decision.base_model, tuple(decision.selected_skills))
@@ -82,6 +93,8 @@ class DynamicRuntime:
             temperature=temperature,
         )
         result = self._result("complete", decision)
+        if adaptation_error:
+            result["adaptation_error"] = adaptation_error
         result.update(
             {
                 "generation": generation,
@@ -98,6 +111,9 @@ class DynamicRuntime:
         router: Router | None = None,
     ) -> DynamicRouteDecision:
         decision = (router or self._rule_router)(messages, list(self.skills.values()))
+        self._validate_decision(decision)
+        if decision.train_new_lora:
+            decision.selected_skills = [self._ensure_plasticity_lora(messages, decision)]
         unknown = [skill_id for skill_id in decision.selected_skills if skill_id not in self.skills]
         if unknown and not decision.remote_loras:
             raise ValueError(f"unknown dynamic skill: {unknown[0]}")
@@ -153,14 +169,121 @@ class DynamicRuntime:
                 scored.append((score, skill.skill_id))
         selected = [skill_id for _score, skill_id in sorted(scored, reverse=True)[:1]]
         config = base_config()
+        remote_loras: list[str] = []
+        if not selected:
+            selected, remote_loras = self._remote_catalog_match(words, config)
         return DynamicRouteDecision(
             base_model=config.get("default_runtime_model") or config["model"],
             selected_skills=selected,
-            remote_loras=[],
+            remote_loras=remote_loras,
             task_type="python_generation",
             semantic_family=None,
             train_new_lora=False,
-            reason="matched local LoRA" if selected else "base fallback",
+            reason="matched local LoRA" if selected and not remote_loras else (
+                "matched remote LoRA catalog" if remote_loras else "base fallback"
+            ),
+        )
+
+    def _remote_catalog_match(self, words: set[str], config: dict) -> tuple[list[str], list[str]]:
+        scored = []
+        for entry in config.get("remote_lora_catalog") or []:
+            if not isinstance(entry, dict):
+                continue
+            skill_id = entry.get("skill_id")
+            source = entry.get("source")
+            cues = entry.get("cues") or []
+            if not isinstance(skill_id, str) or not isinstance(source, str):
+                continue
+            score = sum(
+                1
+                for cue in cues
+                if isinstance(cue, str)
+                and any(word in cue.lower() or cue.lower() in word for word in words)
+            )
+            if score:
+                scored.append((score, skill_id, source))
+        if not scored:
+            return [], []
+        _score, skill_id, source = sorted(scored, reverse=True)[0]
+        return [skill_id], [source]
+
+    def _validate_decision(self, decision: DynamicRouteDecision) -> None:
+        if decision.train_new_lora and (decision.selected_skills or decision.remote_loras):
+            raise ValueError("ambiguous dynamic route: train_new_lora cannot combine with selected_skills or remote_loras")
+        if decision.remote_loras and len(decision.remote_loras) != len(decision.selected_skills):
+            raise ValueError("ambiguous dynamic route: remote_loras must map one-to-one with selected_skills")
+
+    def _ensure_plasticity_lora(
+        self,
+        messages: list[dict[str, str]],
+        decision: DynamicRouteDecision,
+    ) -> str:
+        config = base_config()
+        if not config.get("training_enabled"):
+            raise ValueError("dynamic plasticity training is disabled")
+        train_dataset = config.get("plasticity_train_dataset")
+        publish_dir = config.get("plasticity_publish_dir")
+        if not train_dataset or not publish_dir:
+            raise ValueError("dynamic plasticity training requires plasticity_train_dataset and plasticity_publish_dir")
+        text = "\n".join(message["content"] for message in messages if message["role"] == "user")
+        skill_id = f"plasticity_{hashlib.sha256(text.encode()).hexdigest()[:8]}"
+        if skill_id in self.skills:
+            return skill_id
+        output = Path(publish_dir) / skill_id
+        if output.exists():
+            validate_skill_package(output)
+            self.reload()
+            if skill_id in self.skills:
+                return skill_id
+        limit = config.get("max_plasticity_loras")
+        if limit is not None:
+            existing = sum(1 for existing_id in self.skills if existing_id.startswith("plasticity_"))
+            if existing >= int(limit):
+                raise ValueError("plasticity skill cap reached")
+        eval_dataset = config.get("plasticity_eval_dataset") or train_dataset
+        with tempfile.TemporaryDirectory(prefix=f"skillcortex-{skill_id}-publish-") as directory:
+            staging = Path(directory) / skill_id
+            train_skill_package(
+                skill=skill_id,
+                mode="generic",
+                output=staging,
+                train_dataset=Path(train_dataset),
+                eval_dataset=Path(eval_dataset),
+                name=skill_id.replace("_", " ").title(),
+                version="0.1.0",
+                description=f"On-demand plasticity LoRA for {decision.reason}.",
+                composition={
+                    "capabilities": {"allowed_task_types": [decision.task_type or "python_generation"]},
+                    "activation": {
+                        "default_route_type": "adapter",
+                        "scope": "task",
+                        "semantic_families": [decision.semantic_family] if decision.semantic_family else [],
+                    },
+                    "compatibility": {"compatible_skills": [], "incompatible_skills": []},
+                    "routing": {"tasks": {}},
+                },
+                force=True,
+                dry_run=False,
+            )
+            validate_skill_package(staging)
+            output.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(staging), str(output))
+        validate_skill_package(output)
+        self.reload()
+        if skill_id not in self.skills:
+            raise ValueError(f"trained plasticity LoRA did not produce a valid package: {skill_id}")
+        return skill_id
+
+    def _base_fallback_decision(self, reason: str) -> DynamicRouteDecision:
+        config = base_config()
+        return DynamicRouteDecision(
+            base_model=str(config.get("default_runtime_model") or config["model"]),
+            selected_skills=[],
+            remote_loras=[],
+            task_type=None,
+            semantic_family=None,
+            train_new_lora=False,
+            reason=f"base fallback after adaptation error: {reason}",
         )
 
     def _router_model(
@@ -215,6 +338,7 @@ class DynamicRuntime:
             self.skills[skill_id]
             for skill_id in decision.selected_skills
         ]
+        branch = self._route_branch(decision)
         return {
             "status": status,
             "runtime": "dynamic",
@@ -225,5 +349,25 @@ class DynamicRuntime:
             "remote_loras": decision.remote_loras,
             "train_new_lora": decision.train_new_lora,
             "reason": decision.reason,
+            "route_branch": branch,
+            "route_trace": {
+                "router_output": {
+                    "selected_skills": decision.selected_skills,
+                    "remote_loras": decision.remote_loras,
+                    "train_new_lora": decision.train_new_lora,
+                    "reason": decision.reason,
+                },
+                "branch": branch,
+                "final_selected_skills": decision.selected_skills,
+            },
             "active_adapter_count": len(active),
         }
+
+    def _route_branch(self, decision: DynamicRouteDecision) -> str:
+        if decision.train_new_lora:
+            return "plasticity_train"
+        if decision.remote_loras:
+            return "remote_lora"
+        if decision.selected_skills:
+            return "local_lora"
+        return "base_fallback"

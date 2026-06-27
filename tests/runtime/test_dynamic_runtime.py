@@ -1,3 +1,4 @@
+import hashlib
 import json
 from pathlib import Path
 
@@ -82,6 +83,53 @@ def test_dynamic_infer_dry_run_falls_back_to_base(tmp_path, capsys):
     assert output["reason"] == "base fallback"
 
 
+def test_dynamic_infer_dry_run_selects_remote_catalog_match(tmp_path, monkeypatch, capsys):
+    calls = []
+
+    monkeypatch.setattr(
+        "skillcortex.runtime.dynamic.base_config",
+        lambda: {
+            "model": "mlx-test-base",
+            "default_runtime_model": "mlx-test-base",
+            "remote_lora_catalog": [
+                {"skill_id": "fastapi_remote", "source": "hf://owner/fastapi", "cues": ["fastapi"]}
+            ],
+        },
+    )
+    runtime = DynamicRuntime.load(tmp_path / "skills", allow_remote_loras=True)
+
+    def fake_resolve(source, skill_id, name=None):
+        calls.append((source, skill_id, name))
+        _skill(tmp_path, skill_id, description="FastAPI remote adapter", capabilities=["fastapi"])
+        runtime.registry.reload()
+        return runtime.registry.local[skill_id]
+
+    monkeypatch.setattr(runtime.registry, "resolve_remote", fake_resolve)
+    monkeypatch.setattr("skillcortex.runtime.dynamic.DynamicRuntime.load", lambda *args, **kwargs: runtime)
+
+    assert (
+        main(
+            [
+                "infer",
+                "--skills-dir",
+                str(tmp_path / "skills"),
+                "--prompt",
+                "Fix a FastAPI validation bug",
+                "--allow-remote-loras",
+                "--dry-run",
+            ]
+        )
+        == 0
+    )
+
+    output = json.loads(capsys.readouterr().out)
+    assert calls == [("hf://owner/fastapi", "fastapi_remote", None)]
+    assert output["selected_skills"] == ["fastapi_remote"]
+    assert output["remote_loras"] == ["hf://owner/fastapi"]
+    assert output["route_branch"] == "remote_lora"
+    assert output["route_trace"]["final_selected_skills"] == ["fastapi_remote"]
+
+
 def test_dynamic_router_rejects_unknown_skill(tmp_path):
     _skill(tmp_path, "fastapi_skill", description="FastAPI endpoint validation", capabilities=["fastapi"])
     runtime = DynamicRuntime.load(tmp_path / "skills")
@@ -123,6 +171,325 @@ def test_dynamic_router_allows_unknown_skill_when_remote_lora_is_available(tmp_p
     )
 
     assert decision.selected_skills == ["fastapi_skill"]
+
+
+def test_dynamic_router_rejects_training_when_disabled(tmp_path, monkeypatch):
+    runtime = DynamicRuntime.load(tmp_path / "skills")
+    monkeypatch.setattr(
+        "skillcortex.runtime.dynamic.base_config",
+        lambda: {
+            "model": "mlx-test-base",
+            "default_runtime_model": "mlx-test-base",
+            "training_enabled": False,
+        },
+    )
+
+    with pytest.raises(ValueError, match="dynamic plasticity training is disabled"):
+        runtime.route(
+            [{"role": "user", "content": "Fix FastAPI"}],
+            router=lambda _messages, _skills: DynamicRouteDecision(
+                base_model="mlx-test-base",
+                selected_skills=[],
+                remote_loras=[],
+                task_type="python_generation",
+                semantic_family=None,
+                train_new_lora=True,
+                reason="needs training",
+            ),
+        )
+
+
+def test_dynamic_router_rejects_ambiguous_train_and_remote(tmp_path, monkeypatch):
+    runtime = DynamicRuntime.load(tmp_path / "skills")
+    monkeypatch.setattr(
+        "skillcortex.runtime.dynamic.base_config",
+        lambda: {
+            "model": "mlx-test-base",
+            "default_runtime_model": "mlx-test-base",
+            "training_enabled": True,
+            "plasticity_train_dataset": "data/train.jsonl",
+            "plasticity_publish_dir": str(tmp_path / "skills"),
+        },
+    )
+
+    with pytest.raises(ValueError, match="ambiguous dynamic route"):
+        runtime.route(
+            [{"role": "user", "content": "Fix FastAPI"}],
+            router=lambda _messages, _skills: DynamicRouteDecision(
+                base_model="mlx-test-base",
+                selected_skills=["remote_skill"],
+                remote_loras=["hf://owner/repo"],
+                task_type="python_generation",
+                semantic_family=None,
+                train_new_lora=True,
+                reason="bad router",
+            ),
+        )
+
+
+def test_dynamic_router_trains_plasticity_lora_when_enabled(tmp_path, monkeypatch):
+    runtime = DynamicRuntime.load(tmp_path / "skills")
+    prompt = "Fix FastAPI validation"
+    expected_skill = "plasticity_" + hashlib.sha256(prompt.encode()).hexdigest()[:8]
+    calls = []
+
+    monkeypatch.setattr(
+        "skillcortex.runtime.dynamic.base_config",
+        lambda: {
+            "model": "mlx-test-base",
+            "default_runtime_model": "mlx-test-base",
+            "training_enabled": True,
+            "plasticity_train_dataset": "data/train.jsonl",
+            "plasticity_eval_dataset": "data/eval.jsonl",
+            "plasticity_publish_dir": str(tmp_path / "skills"),
+        },
+    )
+
+    def fake_train_skill_package(**kwargs):
+        calls.append(kwargs)
+        eval_summary = tmp_path / "plasticity-eval.json"
+        eval_summary.write_text(json.dumps({"modes": {}, "tasks": {}}) + "\n")
+        package_skill(
+            skill_id=kwargs["skill"],
+            name=kwargs["name"],
+            adapter_dir=Path("artifacts/adapters/python_skill"),
+            output=kwargs["output"],
+            train_dataset=kwargs["train_dataset"],
+            eval_dataset=kwargs["eval_dataset"],
+            eval_summary=eval_summary,
+            version=kwargs["version"],
+            description=kwargs["description"],
+            composition=kwargs["composition"],
+            force=True,
+        )
+        return {"status": "complete", "skill_id": kwargs["skill"]}
+
+    monkeypatch.setattr("skillcortex.runtime.dynamic.train_skill_package", fake_train_skill_package)
+
+    decision = runtime.route(
+        [{"role": "user", "content": prompt}],
+        router=lambda _messages, _skills: DynamicRouteDecision(
+            base_model="mlx-test-base",
+            selected_skills=[],
+            remote_loras=[],
+            task_type="python_generation",
+            semantic_family="fastapi",
+            train_new_lora=True,
+            reason="needs training",
+        ),
+    )
+
+    assert decision.selected_skills == [expected_skill]
+    assert calls[0]["skill"] == expected_skill
+    assert calls[0]["mode"] == "generic"
+    assert (tmp_path / "skills" / expected_skill / "skill.yaml").exists()
+
+
+def test_dynamic_router_reuses_existing_plasticity_lora(tmp_path, monkeypatch):
+    prompt = "Fix FastAPI validation"
+    expected_skill = "plasticity_" + hashlib.sha256(prompt.encode()).hexdigest()[:8]
+    _skill(tmp_path, expected_skill, description="Existing plasticity adapter")
+    runtime = DynamicRuntime.load(tmp_path / "skills")
+    monkeypatch.setattr(
+        "skillcortex.runtime.dynamic.base_config",
+        lambda: {
+            "model": "mlx-test-base",
+            "default_runtime_model": "mlx-test-base",
+            "training_enabled": True,
+            "plasticity_train_dataset": "data/train.jsonl",
+            "plasticity_publish_dir": str(tmp_path / "skills"),
+        },
+    )
+    monkeypatch.setattr(
+        "skillcortex.runtime.dynamic.train_skill_package",
+        lambda **kwargs: (_ for _ in ()).throw(AssertionError("should reuse existing skill")),
+    )
+
+    decision = runtime.route(
+        [{"role": "user", "content": prompt}],
+        router=lambda _messages, _skills: DynamicRouteDecision(
+            base_model="mlx-test-base",
+            selected_skills=[],
+            remote_loras=[],
+            task_type="python_generation",
+            semantic_family=None,
+            train_new_lora=True,
+            reason="needs training",
+        ),
+    )
+
+    assert decision.selected_skills == [expected_skill]
+
+
+def test_dynamic_router_does_not_publish_invalid_plasticity_lora(tmp_path, monkeypatch):
+    runtime = DynamicRuntime.load(tmp_path / "skills")
+    prompt = "Fix FastAPI validation"
+    expected_skill = "plasticity_" + hashlib.sha256(prompt.encode()).hexdigest()[:8]
+    monkeypatch.setattr(
+        "skillcortex.runtime.dynamic.base_config",
+        lambda: {
+            "model": "mlx-test-base",
+            "default_runtime_model": "mlx-test-base",
+            "training_enabled": True,
+            "plasticity_train_dataset": "data/train.jsonl",
+            "plasticity_publish_dir": str(tmp_path / "skills"),
+        },
+    )
+
+    def fake_train_skill_package(**kwargs):
+        kwargs["output"].mkdir(parents=True)
+        (kwargs["output"] / "skill.yaml").write_text("skill_id: broken\n")
+        return {"status": "complete", "skill_id": kwargs["skill"]}
+
+    monkeypatch.setattr("skillcortex.runtime.dynamic.train_skill_package", fake_train_skill_package)
+    monkeypatch.setattr(
+        "skillcortex.runtime.dynamic.validate_skill_package",
+        lambda path: (_ for _ in ()).throw(ValueError("invalid package")),
+    )
+
+    with pytest.raises(ValueError, match="invalid package"):
+        runtime.route(
+            [{"role": "user", "content": prompt}],
+            router=lambda _messages, _skills: DynamicRouteDecision(
+                base_model="mlx-test-base",
+                selected_skills=[],
+                remote_loras=[],
+                task_type="python_generation",
+                semantic_family=None,
+                train_new_lora=True,
+                reason="needs training",
+            ),
+        )
+
+    assert not (tmp_path / "skills" / expected_skill).exists()
+
+
+def test_dynamic_router_respects_plasticity_skill_cap(tmp_path, monkeypatch):
+    _skill(tmp_path, "plasticity_existing", description="Existing plasticity adapter")
+    runtime = DynamicRuntime.load(tmp_path / "skills")
+    monkeypatch.setattr(
+        "skillcortex.runtime.dynamic.base_config",
+        lambda: {
+            "model": "mlx-test-base",
+            "default_runtime_model": "mlx-test-base",
+            "training_enabled": True,
+            "plasticity_train_dataset": "data/train.jsonl",
+            "plasticity_publish_dir": str(tmp_path / "skills"),
+            "max_plasticity_loras": 1,
+        },
+    )
+    monkeypatch.setattr(
+        "skillcortex.runtime.dynamic.train_skill_package",
+        lambda **kwargs: (_ for _ in ()).throw(AssertionError("should refuse before training")),
+    )
+
+    with pytest.raises(ValueError, match="plasticity skill cap reached"):
+        runtime.route(
+            [{"role": "user", "content": "A new unmatched task"}],
+            router=lambda _messages, _skills: DynamicRouteDecision(
+                base_model="mlx-test-base",
+                selected_skills=[],
+                remote_loras=[],
+                task_type="python_generation",
+                semantic_family=None,
+                train_new_lora=True,
+                reason="needs training",
+            ),
+        )
+
+
+def test_dynamic_infer_falls_back_to_base_when_adaptation_fails(tmp_path, monkeypatch):
+    runtime = DynamicRuntime.load(tmp_path / "skills", allow_remote_loras=True)
+    runtime._router_model = lambda _messages, _skills: DynamicRouteDecision(
+        base_model="mlx-test-base",
+        selected_skills=["remote_skill"],
+        remote_loras=["hf://owner/repo"],
+        task_type="python_generation",
+        semantic_family=None,
+        train_new_lora=False,
+        reason="remote router",
+    )
+    monkeypatch.setattr(
+        runtime.registry,
+        "resolve_remote",
+        lambda source, skill_id, name=None: (_ for _ in ()).throw(ValueError("fetch failed")),
+    )
+    monkeypatch.setattr("skillcortex.runtime.dynamic.load_model", lambda model_name=None, adapter=None: ("m", "t"))
+    monkeypatch.setattr("skillcortex.runtime.dynamic.generate_text", lambda *args, **kwargs: ("base answer", 1, 2))
+
+    result = runtime.infer(prompt="Fix FastAPI")
+
+    assert result["status"] == "complete"
+    assert result["selected_skills"] == []
+    assert result["route_branch"] == "base_fallback"
+    assert result["adaptation_error"] == "fetch failed"
+    assert result["generation"] == "base answer"
+
+
+def test_dynamic_infer_trains_reloads_and_reuses_plasticity_lora(tmp_path, monkeypatch):
+    runtime = DynamicRuntime.load(tmp_path / "skills")
+    prompt = "Fix FastAPI validation"
+    expected_skill = "plasticity_" + hashlib.sha256(prompt.encode()).hexdigest()[:8]
+    calls = []
+    loaded = []
+    monkeypatch.setattr(
+        "skillcortex.runtime.dynamic.base_config",
+        lambda: {
+            "model": "mlx-test-base",
+            "default_runtime_model": "mlx-test-base",
+            "training_enabled": True,
+            "plasticity_train_dataset": "data/train.jsonl",
+            "plasticity_eval_dataset": "data/eval.jsonl",
+            "plasticity_publish_dir": str(tmp_path / "skills"),
+            "max_plasticity_loras": 8,
+        },
+    )
+
+    def fake_train_skill_package(**kwargs):
+        calls.append(kwargs)
+        eval_summary = tmp_path / "plasticity-loop-eval.json"
+        eval_summary.write_text(json.dumps({"modes": {}, "tasks": {}}) + "\n")
+        package_skill(
+            skill_id=kwargs["skill"],
+            name=kwargs["name"],
+            adapter_dir=Path("artifacts/adapters/python_skill"),
+            output=kwargs["output"],
+            train_dataset=kwargs["train_dataset"],
+            eval_dataset=kwargs["eval_dataset"],
+            eval_summary=eval_summary,
+            version=kwargs["version"],
+            description=kwargs["description"],
+            composition=kwargs["composition"],
+            force=True,
+        )
+        return {"status": "complete", "skill_id": kwargs["skill"]}
+
+    runtime._router_model = lambda _messages, _skills: DynamicRouteDecision(
+        base_model="mlx-test-base",
+        selected_skills=[],
+        remote_loras=[],
+        task_type="python_generation",
+        semantic_family="fastapi",
+        train_new_lora=True,
+        reason="needs training",
+    )
+    monkeypatch.setattr("skillcortex.runtime.dynamic.train_skill_package", fake_train_skill_package)
+    monkeypatch.setattr(
+        "skillcortex.runtime.dynamic.load_model",
+        lambda model_name=None, adapter=None: (loaded.append(adapter) or "m", "t"),
+    )
+    monkeypatch.setattr("skillcortex.runtime.dynamic.generate_text", lambda *args, **kwargs: ("adapter answer", 1, 2))
+
+    first = runtime.infer(prompt=prompt)
+    second = runtime.infer(prompt=prompt)
+
+    assert first["generation"] == "adapter answer"
+    assert first["route_branch"] == "plasticity_train"
+    assert first["selected_skills"] == [expected_skill]
+    assert second["selected_skills"] == [expected_skill]
+    assert len(calls) == 1
+    assert len(loaded) == 1
+    assert str(loaded[0]).endswith("adapter")
 
 
 def test_dynamic_runtime_cache_key_includes_base_model_and_loras(tmp_path, monkeypatch):

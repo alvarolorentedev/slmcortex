@@ -61,8 +61,8 @@ class AdapterRegistry:
             skill_id=skill_id,
             name=name or skill_id.replace("_", " ").title(),
             output=output,
-            train_dataset=Path("data/train.jsonl"),
-            eval_dataset=Path("data/eval.jsonl"),
+            train_dataset=Path(config.get("remote_lora_train_dataset") or "data/train.jsonl"),
+            eval_dataset=Path(config.get("remote_lora_eval_dataset") or "data/eval.jsonl"),
             cache_dir=self.cache_dir,
         )
         self.reload()
