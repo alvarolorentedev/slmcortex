@@ -60,6 +60,49 @@ def load_chat_request_payload(payload: dict) -> dict:
     return normalize_chat_request(payload)
 
 
+def _collect_agent_tasks(task_args: list[str] | None) -> list[str]:
+    if task_args:
+        tasks = [item.strip() for item in task_args if item and item.strip()]
+        if tasks:
+            return tasks
+
+
+def _stream_agent_tasks() -> object:
+    if not sys.stdin.isatty():
+        def stdin_provider() -> str | None:
+            while True:
+                line = sys.stdin.readline()
+                if line == "":
+                    return None
+                value = line.strip()
+                if value:
+                    return value
+
+        return stdin_provider
+
+    print("Enter agent tasks, one per line. Submit an empty line to start execution.", file=sys.stderr)
+    task_count = 0
+
+    def prompt_provider() -> str | None:
+        nonlocal task_count
+        while True:
+            try:
+                line = input(f"task {task_count + 1}> ")
+            except EOFError as error:
+                if task_count:
+                    return None
+                raise ValueError("at least one task is required") from error
+            value = line.strip()
+            if not value:
+                if task_count:
+                    return None
+                continue
+            task_count += 1
+            return value
+
+    return prompt_provider
+
+
 def _package_composition(parsed: argparse.Namespace) -> dict | None:
     if not any(
         (
@@ -326,7 +369,11 @@ def _parser() -> argparse.ArgumentParser:
     )
     agent_run.add_argument("--runtime", required=True)
     agent_run.add_argument("--repo", required=True)
-    agent_run.add_argument("--task", required=True)
+    agent_run.add_argument(
+        "--task",
+        action="append",
+        help="Optional. Repeat to preload tasks. If omitted, tasks are read from stdin or prompted interactively.",
+    )
     agent_run.add_argument("--writes", "--write-mode", dest="writes", choices=WRITE_MODES, default="confirm")
     agent_run.add_argument("--test-command")
     agent_run.add_argument("--trace-out")
@@ -435,14 +482,17 @@ def main(argv: list[str] | None = None) -> int:
         elif parsed.command == "agent":
             if parsed.agent_command != "run":
                 raise ValueError(f"unknown agent command: {parsed.agent_command}")
+            tasks = _collect_agent_tasks(parsed.task)
+            task_provider = None if tasks else _stream_agent_tasks()
             result = run_agent(
                 runtime_path=Path(parsed.runtime),
                 repo=Path(parsed.repo),
-                task=parsed.task,
+                task=tasks,
                 writes=parsed.writes,
                 test_command=parsed.test_command,
                 trace_out=Path(parsed.trace_out) if parsed.trace_out else None,
                 dry_run=parsed.dry_run,
+                task_provider=task_provider,
             )
         else:
             result = validate_skill_package(Path(parsed.path))
