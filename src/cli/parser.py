@@ -31,6 +31,8 @@ def build_parser() -> argparse.ArgumentParser:
     _add_generate_dataset_parser(commands)
     _add_validate_dataset_parser(commands)
     _add_train_skill_parser(commands)
+    _add_train_plasticity_lora_parser(commands)
+    _add_import_lora_parser(commands)
     _add_package_skill_parser(commands)
     _add_validate_skill_package_parser(commands)
     _add_validate_runtime_parser(commands)
@@ -103,6 +105,45 @@ def _add_train_skill_parser(commands) -> None:
     train.add_argument("--seed", type=int)
     train.add_argument("--force", action="store_true")
     train.add_argument("--dry-run", action="store_true")
+
+
+def _add_train_plasticity_lora_parser(commands) -> None:
+    train = commands.add_parser(
+        "train-plasticity-lora",
+        **parser_kwargs(
+            "Train an explicit on-demand LoRA from a JSONL prompt/target dataset.",
+            "skillcortex train-plasticity-lora --skill-id local_fix --name \"Local Fix\" --prompt-file data/train.jsonl --output skills/local_fix --dry-run",
+        ),
+    )
+    train.add_argument("--skill-id", required=True)
+    train.add_argument("--name", required=True)
+    train.add_argument("--prompt-file", required=True)
+    train.add_argument("--eval-dataset")
+    train.add_argument("--output", required=True)
+    train.add_argument("--version", default="0.1.0")
+    train.add_argument("--description")
+    train.add_argument("--seed", type=int)
+    train.add_argument("--force", action="store_true")
+    train.add_argument("--dry-run", action="store_true")
+
+
+def _add_import_lora_parser(commands) -> None:
+    import_lora = commands.add_parser(
+        "import-lora",
+        **parser_kwargs(
+            "Import a public Hugging Face LoRA into a local SkillCortex package.",
+            "skillcortex import-lora --source hf://owner/repo --skill-id fastapi_skill --name \"FastAPI Skill\" --output skills/fastapi_skill --train-dataset data/train.jsonl --eval-dataset data/eval.jsonl",
+        ),
+    )
+    import_lora.add_argument("--source", required=True)
+    import_lora.add_argument("--skill-id", required=True)
+    import_lora.add_argument("--name", required=True)
+    import_lora.add_argument("--output", required=True)
+    import_lora.add_argument("--train-dataset", required=True)
+    import_lora.add_argument("--eval-dataset", required=True)
+    import_lora.add_argument("--version", default="0.1.0")
+    import_lora.add_argument("--description")
+    import_lora.add_argument("--force", action="store_true")
 
 
 def _add_package_skill_parser(commands) -> None:
@@ -212,7 +253,8 @@ def _add_infer_parser(commands) -> None:
             "skillcortex infer --runtime /tmp/skillcortex-demo/runtime --request-file tests/fixtures/skillcortex_demo/request.json --dry-run",
         ),
     )
-    infer.add_argument("--runtime", required=True)
+    infer.add_argument("--runtime")
+    infer.add_argument("--skills-dir")
     infer.add_argument("--prompt")
     infer.add_argument("--request-file")
     infer.add_argument("--system")

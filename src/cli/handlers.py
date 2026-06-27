@@ -12,7 +12,8 @@ from ..composer import compose_skill_packages
 from ..dataset_factory import generate_dataset_bundle
 from ..datasets import validate_dataset_command
 from ..packaging import package_skill, train_skill_package, validate_skill_package
-from ..runtime import SkillRuntime, serve_runtime, validate_runtime_bundle
+from ..packaging.importers import import_lora
+from ..runtime import DynamicRuntime, SkillRuntime, serve_runtime, validate_runtime_bundle
 from .common import csv_paths, default_dataset_outputs, infer_payload, package_composition, resolve_train_skill
 
 
@@ -68,6 +69,42 @@ def execute_command(
                 "default composition metadata applied for arbitrary train-skill"
             ]
         return result
+    if parsed.command == "train-plasticity-lora":
+        return train_skill_package(
+            skill=parsed.skill_id,
+            mode="generic",
+            output=Path(parsed.output),
+            train_dataset=Path(parsed.prompt_file),
+            eval_dataset=Path(parsed.eval_dataset or parsed.prompt_file),
+            name=parsed.name,
+            version=parsed.version,
+            description=parsed.description,
+            composition={
+                "capabilities": {"allowed_task_types": ["python_generation"]},
+                "activation": {
+                    "default_route_type": "adapter",
+                    "scope": "task",
+                    "semantic_families": [],
+                },
+                "compatibility": {"compatible_skills": [], "incompatible_skills": []},
+                "routing": {"tasks": {}},
+            },
+            seed=parsed.seed,
+            force=parsed.force,
+            dry_run=parsed.dry_run,
+        )
+    if parsed.command == "import-lora":
+        return import_lora(
+            source=parsed.source,
+            skill_id=parsed.skill_id,
+            name=parsed.name,
+            output=Path(parsed.output),
+            train_dataset=Path(parsed.train_dataset),
+            eval_dataset=Path(parsed.eval_dataset),
+            version=parsed.version,
+            description=parsed.description,
+            force=parsed.force,
+        )
     if parsed.command == "package-skill":
         return package_skill(
             skill_id=parsed.skill_id,
@@ -114,7 +151,16 @@ def execute_command(
     if parsed.command == "validate-runtime":
         return validate_runtime_bundle(Path(parsed.runtime))
     if parsed.command == "infer":
+        if bool(parsed.runtime) == bool(parsed.skills_dir):
+            raise ValueError("infer requires exactly one of --runtime or --skills-dir")
         payload = infer_payload(parsed)
+        if parsed.skills_dir:
+            return DynamicRuntime.load(Path(parsed.skills_dir)).infer(
+                messages=payload["messages"],
+                max_tokens=payload.get("max_tokens"),
+                temperature=payload.get("temperature"),
+                dry_run=parsed.dry_run,
+            )
         return SkillRuntime.load(Path(parsed.runtime)).infer(
             messages=payload["messages"],
             task_type=payload.get("task_type"),

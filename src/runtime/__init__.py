@@ -12,6 +12,7 @@ from .models import REQUIRED_RUNTIME_FILES, RuntimeBundle, RuntimeRouteDecision,
 from .request import load_chat_request, normalize_chat_request, normalize_messages
 from .routing import build_route_decision
 from .router_rules import route_text
+from .dynamic import DynamicRuntime, DynamicRouteDecision
 from ..composer.adapters import temporary_composed_adapter
 
 

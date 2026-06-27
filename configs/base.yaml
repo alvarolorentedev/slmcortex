@@ -1,4 +1,7 @@
 source_model: Qwen/Qwen2.5-Coder-1.5B-Instruct
 model: mlx-community/Qwen2.5-Coder-1.5B-Instruct-4bit
+default_runtime_model: mlx-community/Qwen2.5-Coder-1.5B-Instruct-4bit
+router_model: mlx-community/Qwen2.5-Coder-1.5B-Instruct-4bit
+lora_cache_dir: skills
 max_tokens: 256
 temperature: 0.0
