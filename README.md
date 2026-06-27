@@ -260,6 +260,12 @@ skillcortex agent run \
   --dry-run
 ```
 
+To run the four-scenario dynamic acceptance harness locally:
+
+```bash
+python scripts/run_dynamic_agent_acceptance_harness.py --output-root /tmp/skillcortex-dynamic-agent-harness
+```
+
 ### Package an existing adapter
 
 ```bash
