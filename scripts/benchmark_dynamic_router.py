@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 import json
 import os
@@ -21,15 +23,22 @@ CASES = [
 
 
 def run_benchmark(skills_dir: Path) -> dict:
-    os.environ.setdefault("SKILLCORTEX_BASE_CONFIG", str(Path("configs/prototype.yaml").resolve()))
-    with tempfile.TemporaryDirectory(prefix="skillcortex-router-bench-") as directory:
-        benchmark_skills = skills_dir if any(skills_dir.glob("*/skill.yaml")) else _demo_skills(Path(directory))
-        runtime = DynamicRuntime.load(benchmark_skills, allow_remote_loras=False)
-        rows = []
-        for prompt, expected in CASES:
-            decision = _decision(runtime, prompt)
-            actual = runtime._route_branch(decision)
-            rows.append({"prompt": prompt, "expected": expected, "actual": actual, "passed": actual == expected})
+    previous = os.environ.get("SKILLCORTEX_BASE_CONFIG")
+    os.environ["SKILLCORTEX_BASE_CONFIG"] = str(Path("configs/prototype.yaml").resolve())
+    rows = []
+    try:
+        with tempfile.TemporaryDirectory(prefix="skillcortex-router-bench-") as directory:
+            benchmark_skills = skills_dir if any(skills_dir.glob("*/skill.yaml")) else _demo_skills(Path(directory))
+            runtime = DynamicRuntime.load(benchmark_skills, allow_remote_loras=False)
+            for prompt, expected in CASES:
+                decision = _decision(runtime, prompt)
+                actual = runtime._route_branch(decision)
+                rows.append({"prompt": prompt, "expected": expected, "actual": actual, "passed": actual == expected})
+    finally:
+        if previous is None:
+            os.environ.pop("SKILLCORTEX_BASE_CONFIG", None)
+        else:
+            os.environ["SKILLCORTEX_BASE_CONFIG"] = previous
     return {
         "total": len(rows),
         "passed": sum(row["passed"] for row in rows),

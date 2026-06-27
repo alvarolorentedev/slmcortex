@@ -878,10 +878,11 @@ wheels = [
 ]
 
 [[package]]
-name = "skill-lattice-coder"
+name = "skillcortex"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "huggingface-hub" },
     { name = "mlx-lm" },
     { name = "pyyaml" },
 ]
@@ -898,6 +899,7 @@ test = [
 requires-dist = [
     { name = "fastapi", marker = "extra == 'test'", specifier = "==0.138.0" },
     { name = "httpx", marker = "extra == 'test'", specifier = "==0.28.1" },
+    { name = "huggingface-hub", specifier = ">=1.20,<2" },
     { name = "mlx-lm", specifier = ">=0.31,<0.32" },
     { name = "pydantic", marker = "extra == 'test'", specifier = "==2.13.4" },
     { name = "pytest", marker = "extra == 'test'", specifier = ">=8,<10" },
