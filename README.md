@@ -64,11 +64,11 @@ Deep-dive docs:
 
 | Scenario | Status | Notes |
 | --- | --- | --- |
-| Package, compose, validate, and no-model demo | Supported | Documented for macOS with Python 3.11+ |
-| Real runtime inference | Supported with constraints | Requires model-compatible local environment; current local stack is Apple Silicon-first because of `mlx-lm` |
+| Package, compose, validate, and no-model demo | Supported | Python 3.11+ |
+| Real runtime inference | Supported with constraints | MLX on Apple Silicon; GGUF on Linux, Windows, and macOS Intel |
 | Compatibility server | Supported | Minimal, non-streaming OpenAI-compatible surface |
 | Bounded local agent | Supported | Local single-run workflow only |
-| Linux and Windows | Not yet documented | Treat as experimental until verified and documented |
+| Linux and Windows | Supported for GGUF validation/runtime path | Real training/inference still requires local model/tooling setup |
 
 ## Install
 
@@ -81,6 +81,13 @@ pip install --upgrade pip
 pip install -e '.[test]'
 ```
 
+Real model backends are optional:
+
+```bash
+pip install -e '.[mlx]'   # macOS Apple Silicon
+pip install -e '.[gguf]'  # Linux, Windows, macOS Intel, or explicit GGUF use
+```
+
 Check the canonical public CLI:
 
 ```bash
@@ -91,8 +98,11 @@ python -m skillcortex --help
 
 - Python 3.11+ is required
 - The documented no-model demo avoids model downloads and weight loading
-- Real model execution currently follows the repository's Apple Silicon-first
-  `mlx-lm` environment
+- `backend: auto` uses MLX only on macOS arm64/aarch64; Linux, Windows, and
+  macOS Intel default to GGUF
+- Explicit `backend: mlx` is rejected outside macOS Apple Silicon
+- GGUF configs must point `model`/`default_runtime_model` at a `.gguf` file and
+  set `gguf_converter` for training or import conversion
 
 ## Quickstart: No-Model Demo
 
@@ -157,7 +167,9 @@ What the opt-in path additionally validates:
 
 Local assumptions and expected runtime:
 
-- This path is Apple Silicon-first because the repository training stack is built around `mlx-lm`.
+- `backend: auto` chooses MLX on Apple Silicon and GGUF elsewhere.
+- MLX training uses `mlx-lm` and writes `adapter/adapters.safetensors`.
+- GGUF training uses PEFT, converts the LoRA with llama.cpp tooling, and writes `adapter/adapter.gguf`.
 - Expect the real-training path to be slow compared with the no-model demo. Runtime depends on local hardware, Python environment, and whether model weights must download on first use.
 - Treat the real-training path as a manual smoke check, not a normal development loop.
 - To skip it, do nothing extra: the default public quickstart and the default arbitrary-skill smoke both avoid real training.

@@ -10,6 +10,7 @@ from pathlib import Path
 import yaml
 
 from .. import __version__
+from ..shared.config import adapter_weight_name_for_format, resolve_backend
 from ..shared.config import base_config, training_config
 from ..shared.hashing import sha256
 from .artifacts import line_count
@@ -36,6 +37,11 @@ def build_manifests(
 ) -> dict[str, object]:
     created_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     base = base_config()
+    backend = adapter_metadata.get("backend") or resolve_backend(base)
+    adapter_format = adapter_metadata.get("format") or adapter_metadata.get("adapter_format") or (
+        "gguf-lora" if backend == "gguf" else "mlx-lora"
+    )
+    weight_path = f"adapter/{adapter_weight_name_for_format(adapter_format)}"
     training_defaults = training_config()
     rank = int(adapter_metadata.get("rank") or training_defaults["skill_rank"])
     target_modules = adapter_metadata.get("target_modules") or training_defaults["target_modules"]
@@ -89,14 +95,15 @@ def build_manifests(
             "source_model": adapter_metadata.get("source_model") or base["source_model"],
             "runtime_model": adapter_metadata.get("base_model") or base["model"],
             "quantization": adapter_metadata.get("quantization") or "4bit",
+            "backend": backend,
         },
         "adapter": {
-            "format": "mlx-lora",
+            "format": adapter_format,
             "rank": rank,
             "target_modules": target_modules,
             "trainable_parameters": trainable_parameters,
             "files": {
-                "weights": "adapter/adapters.safetensors",
+                "weights": weight_path,
                 "config": "adapter/adapter_config.json",
             },
         },
@@ -137,8 +144,8 @@ def build_manifests(
         "status": "complete",
         "base": metadata["base"],
         "adapter": {
-            "format": "mlx-lora",
-            "path": "adapter/adapters.safetensors",
+            "format": adapter_format,
+            "path": weight_path,
             "config_path": "adapter/adapter_config.json",
             "rank": rank,
             "target_modules": target_modules,
@@ -179,7 +186,7 @@ def write_package(
     examples: Path | None,
 ) -> None:
     (staging / "adapter").mkdir(parents=True, exist_ok=True)
-    shutil.copy2(adapter_weights, staging / "adapter" / "adapters.safetensors")
+    shutil.copy2(adapter_weights, staging / "adapter" / adapter_weights.name)
     if adapter_config is not None:
         shutil.copy2(adapter_config, staging / "adapter" / "adapter_config.json")
     for relative_path, content in manifests.items():

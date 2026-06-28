@@ -11,6 +11,16 @@ pip install --upgrade pip
 pip install -e '.[test]'
 ```
 
+Install one real-model backend only when you need actual training or inference:
+
+```bash
+pip install -e '.[mlx]'   # macOS Apple Silicon
+pip install -e '.[gguf]'  # Linux, Windows, or GGUF on any supported OS
+```
+
+`backend: auto` uses MLX on macOS arm64/aarch64 and GGUF everywhere else.
+GGUF configs must use a `.gguf` runtime model path.
+
 ## 2. Run the no-model demo
 
 ```bash
@@ -83,6 +93,9 @@ If you explicitly want the slower local training path:
 ```bash
 python scripts/run_skillcortex_arbitrary_skill_smoke.py --real-training
 ```
+
+For GGUF training/import conversion, set `gguf_converter` in the selected base
+config to llama.cpp's `convert_lora_to_gguf.py`.
 
 ## 5. Read the command reference
 

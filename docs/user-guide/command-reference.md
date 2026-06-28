@@ -18,6 +18,10 @@ follow-up to the [quickstart](quickstart.md).
 - `agent run` requires exactly one of `--runtime` or `--skills-dir`.
 - `train-plasticity-lora` requires exactly one of `--output` or
   `--publish-dir`.
+- Backend selection comes from base config: `backend: auto | mlx | gguf`.
+  `auto` resolves to MLX only on macOS Apple Silicon and GGUF elsewhere.
+- GGUF requires a `.gguf` runtime model path. MLX is rejected outside macOS
+  arm64/aarch64.
 
 ## At A Glance
 
@@ -161,6 +165,8 @@ Notes:
 - Use `--examples` when you want example snippets attached to the package.
 - Validation happens before training and fails early on malformed or leaky
   data.
+- MLX training writes `adapter/adapters.safetensors`; GGUF training writes
+  `adapter/adapter.gguf` after PEFT training and llama.cpp conversion.
 
 ## `train-plasticity-lora`
 
@@ -245,6 +251,9 @@ skillcortex import-lora \
 Use this when you already have a remote LoRA and only need it wrapped in the
 local package contract.
 
+When the resolved backend is GGUF, import converts the downloaded PEFT LoRA to
+`adapter/adapter.gguf`; set `gguf_converter` in the selected base config.
+
 ## `package-skill`
 
 Package an existing adapter into a self-describing skill artifact.
@@ -258,6 +267,9 @@ Required flags:
 - `--train-dataset`
 - `--eval-dataset`
 - `--eval-summary`
+
+`--adapter-dir` may contain either MLX weights (`adapters.safetensors`) or GGUF
+weights (`adapter.gguf`). Mixed backend packages cannot be composed together.
 
 Optional flags:
 

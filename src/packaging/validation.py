@@ -4,6 +4,7 @@ from pathlib import Path
 
 from ..shared.hashing import sha256
 from ..shared.io import read_json, read_yaml
+from ..shared.config import adapter_format_for_backend, adapter_weight_name_for_format
 from .artifacts import REQUIRED_PACKAGE_FILES, validate_package_checksums
 from .composition import validate_composition_metadata
 
@@ -44,6 +45,13 @@ def validate_skill_package(path: Path) -> dict:
         metadata.get("adapter") or {}
     ).get("trainable_parameters"):
         raise ValueError("manifest mismatch for trainable_parameters")
+    backend = metadata_base.get("backend") or skill_base.get("backend") or "mlx"
+    adapter_format = (metadata.get("adapter") or {}).get("format")
+    if adapter_format != adapter_format_for_backend(backend):
+        raise ValueError(f"adapter format {adapter_format} is incompatible with backend {backend}")
+    adapter_path = root / ((skill_manifest.get("adapter") or {}).get("path") or f"adapter/{adapter_weight_name_for_format(adapter_format)}")
+    if not adapter_path.exists():
+        raise ValueError(f"adapter weights missing for backend {backend}")
 
     if training.get("seed") != (metadata.get("training") or {}).get("seed"):
         raise ValueError("training_config.json seed must match metadata.json")

@@ -159,6 +159,11 @@ def package_skill(
         examples = examples.resolve()
     adapter_weights = _adapter_weights_path(adapter_dir)
     adapter_metadata = _load_json_if_exists(adapter_dir / "metadata.json")
+    if adapter_weights.name == "adapter.gguf":
+        adapter_metadata.setdefault("format", "gguf-lora")
+        adapter_metadata.setdefault("backend", "gguf")
+    else:
+        adapter_metadata.setdefault("format", "mlx-lora")
     adapter_config = adapter_dir / "adapter_config.json"
     eval_payload = _read_json(eval_summary)
     resolved_description = description or f"LoRA coding skill package for {name}."

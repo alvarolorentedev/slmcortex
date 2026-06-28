@@ -19,6 +19,7 @@ def build_bundle(loaded: list[dict], routes: list[dict], enrichment: dict) -> di
             "source_model": base["source_model"],
             "runtime_model": base["runtime_model"],
             "quantization": base["quantization"],
+            "backend": base.get("backend") or "mlx",
         },
         "skills": [
             {
@@ -40,7 +41,7 @@ def build_bundle(loaded: list[dict], routes: list[dict], enrichment: dict) -> di
 def build_budget_report(loaded: list[dict], routes: list[dict]) -> dict:
     stored_parameters = sum(int(item["metadata"]["adapter"]["trainable_parameters"]) for item in loaded)
     bytes_by_skill = {
-        item["skill_id"]: (item["path"] / "adapter" / "adapters.safetensors").stat().st_size
+        item["skill_id"]: (item["path"] / item["metadata"]["adapter"]["files"]["weights"]).stat().st_size
         for item in loaded
     }
     params_by_skill = {

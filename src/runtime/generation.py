@@ -9,6 +9,7 @@ from typing import Any
 
 from ..contracts import KNOWN_SKILLS, MODES, ROUTER_POLICIES, SKILLS
 from ..shared.config import ARTIFACT_DIR, base_config
+from ..shared.config import resolve_backend, validate_runtime_model
 from .router_rules import (
     ProtectedRouterPlusAlternatingSkill,
     ProtectedSkillRouter,
@@ -39,12 +40,18 @@ def require_adapter(name: str, root: str | Path | None = None) -> Path:
 
 
 def load_model(adapter: Path | None = None, model_name: str | None = None):
+    config = base_config()
+    backend = validate_runtime_model({**config, **({"model": model_name} if model_name else {})})
+    if backend == "gguf":
+        from llama_cpp import Llama
+
+        kwargs = {"model_path": model_name or config["model"]}
+        if adapter:
+            kwargs["lora_path"] = str(adapter)
+        return Llama(**kwargs), None
     from mlx_lm import load
 
-    return load(
-        model_name or base_config()["model"],
-        adapter_path=str(adapter) if adapter else None,
-    )
+    return load(model_name or config["model"], adapter_path=str(adapter) if adapter else None)
 
 
 def generate_text(
@@ -56,15 +63,23 @@ def generate_text(
     max_tokens: int | None = None,
     temperature: float | None = None,
 ) -> tuple[str, int, int]:
-    from mlx_lm import generate
-    from mlx_lm.sample_utils import make_sampler
-
     config = base_config()
     if prompt is not None and messages is not None:
         raise ValueError("provide either prompt or messages, not both")
     if prompt is None and not messages:
         raise ValueError("prompt or messages is required")
     resolved_messages = messages or [{"role": "user", "content": prompt or ""}]
+    if hasattr(model, "create_chat_completion"):
+        response = model.create_chat_completion(
+            messages=resolved_messages,
+            max_tokens=max_tokens or config["max_tokens"],
+            temperature=config["temperature"] if temperature is None else temperature,
+        )
+        output = response["choices"][0]["message"]["content"].rstrip()
+        return output, 0, 0
+    from mlx_lm import generate
+    from mlx_lm.sample_utils import make_sampler
+
     formatted = tokenizer.apply_chat_template(
         resolved_messages,
         tokenize=False,

@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ..packaging import validate_composition_metadata, validate_skill_package
+from ..packaging.composition import validate_composition_metadata
+from ..packaging.validation import validate_skill_package
 from ..shared.hashing import package_fingerprint
 from ..shared.io import read_json, read_yaml
 
@@ -12,7 +13,8 @@ def load_skill_package(path: Path) -> dict:
     validate_skill_package(root)
     skill_manifest = read_yaml(root / "skill.yaml")
     metadata = read_json(root / "metadata.json")
-    adapter_config = read_json(root / "adapter" / "adapter_config.json")
+    adapter_config_path = root / "adapter" / "adapter_config.json"
+    adapter_config = read_json(adapter_config_path) if adapter_config_path.exists() else {}
     composition = load_composition(skill_manifest, metadata)
     return {
         "path": root,

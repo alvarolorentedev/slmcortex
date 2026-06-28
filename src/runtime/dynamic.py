@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Callable
 
 from ..composer.adapters import temporary_composed_adapter
-from ..packaging import train_skill_package, validate_skill_package
+from ..packaging.validation import validate_skill_package
 from ..shared.config import base_config
 from .generation import generate_text, load_model
 from .request import normalize_messages
@@ -31,6 +31,12 @@ class DynamicRouteDecision:
 
 
 Router = Callable[[list[dict[str, str]], list[ResolvedAdapter]], DynamicRouteDecision]
+
+
+def train_skill_package(**kwargs):
+    from ..packaging import train_skill_package as package_train_skill
+
+    return package_train_skill(**kwargs)
 
 
 class DynamicRuntime:
@@ -138,9 +144,20 @@ class DynamicRuntime:
             cached = self._cache.get(key)
             if cached is not None:
                 return cached
-            adapter_paths = [self.skills[skill_id].adapter_path.parent for skill_id in selected_skills]
+            adapter_paths = [
+                (
+                    self.skills[skill_id].adapter_path
+                    if self.skills[skill_id].adapter_format == "gguf-lora"
+                    else self.skills[skill_id].adapter_path.parent
+                )
+                for skill_id in selected_skills
+            ]
             if not adapter_paths:
                 model, tokenizer = load_model(model_name=base_model)
+            elif self.skills[selected_skills[0]].adapter_format == "gguf-lora":
+                if len(adapter_paths) > 1:
+                    raise ValueError("GGUF runtime supports one active adapter until adapter merge is configured")
+                model, tokenizer = load_model(adapter=adapter_paths[0], model_name=base_model)
             else:
                 adapter_context = (
                     temporary_composed_adapter(adapter_paths)

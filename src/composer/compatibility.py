@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from .adapters import validate_adapter_configs, validate_adapter_metadata
+from ..shared.config import adapter_format_for_backend
 from ..shared.io import read_json
 
 
@@ -11,10 +12,15 @@ def build_compatibility_report(loaded: list[dict], enrichment: dict) -> dict:
     warnings = []
     manifests = [item["manifest"] for item in loaded]
     first_base = manifests[0].get("base") or {}
-    for key in ("source_model", "runtime_model", "quantization"):
+    for key in ("source_model", "runtime_model", "quantization", "backend"):
         expected = first_base.get(key)
         if any((manifest.get("base") or {}).get(key) != expected for manifest in manifests[1:]):
             errors.append(f"incompatible package base {key}")
+    for item in loaded:
+        backend = (item["metadata"].get("base") or {}).get("backend") or "mlx"
+        adapter_format = (item["metadata"].get("adapter") or {}).get("format")
+        if adapter_format != adapter_format_for_backend(backend):
+            errors.append(f"adapter format {adapter_format} is incompatible with backend {backend}")
     try:
         validate_adapter_metadata(
             [
@@ -28,10 +34,11 @@ def build_compatibility_report(loaded: list[dict], enrichment: dict) -> dict:
         )
     except ValueError as error:
         errors.append(str(error))
-    try:
-        validate_adapter_configs([item["adapter_config"] for item in loaded])
-    except ValueError as error:
-        errors.append(str(error))
+    if all((item["metadata"].get("adapter") or {}).get("format") == "mlx-lora" for item in loaded):
+        try:
+            validate_adapter_configs([item["adapter_config"] for item in loaded])
+        except ValueError as error:
+            errors.append(str(error))
     selected = {item["skill_id"] for item in loaded}
     for item in loaded:
         incompatible = set(((item["composition"].get("compatibility") or {}).get("incompatible_skills") or []))

@@ -22,9 +22,17 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 urls = { Homepage = "https://github.com/alvarolorentedev/crazy-coding-llm", Repository = "https://github.com/alvarolorentedev/crazy-coding-llm", Issues = "https://github.com/alvarolorentedev/crazy-coding-llm/issues" }
-dependencies = ["huggingface-hub>=1.20,<2", "mlx-lm>=0.31,<0.32", "PyYAML>=6,<7"]
+dependencies = ["huggingface-hub>=1,<2", "PyYAML>=6,<7"]
 
 [project.optional-dependencies]
+mlx = ["mlx-lm>=0.31,<0.32"]
+gguf = [
+    "llama-cpp-python>=0.3,<0.4",
+    "peft>=0.18,<0.19",
+    "safetensors>=0.6,<0.7",
+    "torch>=2.7,<3",
+    "transformers>=5,<6",
+]
 test = [
     "fastapi==0.138.0",
     "httpx==0.28.1",

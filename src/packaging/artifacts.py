@@ -12,7 +12,6 @@ REQUIRED_PACKAGE_FILES = (
     "training_config.json",
     "eval.json",
     "README.md",
-    "adapter/adapters.safetensors",
 )
 
 CHECKSUM_EXCLUDES = {"metadata.json"}
@@ -79,10 +78,11 @@ def validate_package_checksums(root: Path, checksums: dict[str, str]) -> None:
 
 
 def adapter_weights_path(adapter_dir: Path) -> Path:
-    path = adapter_dir / "adapters.safetensors"
-    if not path.exists():
-        raise FileNotFoundError(f"adapter weights not found: {path}")
-    return path
+    for name in ("adapters.safetensors", "adapter.gguf"):
+        path = adapter_dir / name
+        if path.exists():
+            return path
+    raise FileNotFoundError(f"adapter weights not found: {adapter_dir}")
 
 
 def line_count(path: Path | None) -> int:

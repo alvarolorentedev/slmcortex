@@ -159,6 +159,10 @@ class SkillRuntime:
             adapter_paths = [self.bundle.skills[skill_id].adapter_path for skill_id in selected_skills]
             if not adapter_paths:
                 model, tokenizer = load_model(model_name=self.bundle.runtime_model)
+            elif self.bundle.backend == "gguf":
+                if len(adapter_paths) > 1:
+                    raise ValueError("GGUF runtime supports one active adapter until adapter merge is configured")
+                model, tokenizer = load_model(adapter=adapter_paths[0], model_name=self.bundle.runtime_model)
             else:
                 adapter_context = (
                     temporary_composed_adapter(adapter_paths)

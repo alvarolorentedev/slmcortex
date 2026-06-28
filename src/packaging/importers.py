@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import subprocess
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -9,6 +10,7 @@ from pathlib import Path
 from huggingface_hub import snapshot_download
 
 from ..shared.config import base_config
+from ..shared.config import resolve_backend
 from ..shared.hashing import sha256
 
 
@@ -94,9 +96,23 @@ def import_lora(
         root = Path(directory)
         adapter = root / "adapter"
         adapter.mkdir()
-        shutil.copy2(cached / "adapter_config.json", adapter / "adapter_config.json")
-        shutil.copy2(_adapter_file(cached), adapter / "adapters.safetensors")
         config = base_config()
+        backend = resolve_backend(config)
+        if backend == "gguf":
+            peft = root / "peft"
+            peft.mkdir()
+            shutil.copy2(cached / "adapter_config.json", peft / "adapter_config.json")
+            shutil.copy2(_adapter_file(cached), peft / "adapter_model.safetensors")
+            converter = config.get("gguf_converter")
+            if not converter:
+                raise ValueError("GGUF import requires gguf_converter in base config")
+            subprocess.run(
+                ["python", str(converter), str(peft), "--outfile", str(adapter / "adapter.gguf")],
+                check=True,
+            )
+        else:
+            shutil.copy2(cached / "adapter_config.json", adapter / "adapter_config.json")
+            shutil.copy2(_adapter_file(cached), adapter / "adapters.safetensors")
         (adapter / "metadata.json").write_text(
             json.dumps(
                 {
@@ -104,6 +120,8 @@ def import_lora(
                     "source_model": config.get("source_model"),
                     "base_model": config.get("default_runtime_model") or config.get("model"),
                     "quantization": "unknown",
+                    "backend": backend,
+                    "format": "gguf-lora" if backend == "gguf" else "mlx-lora",
                     "rank": 0,
                     "trainable_parameters": 0,
                     "source": source,

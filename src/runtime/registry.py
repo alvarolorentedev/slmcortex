@@ -3,9 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from ..packaging import validate_skill_package
+from ..packaging.validation import validate_skill_package
 from ..packaging.importers import import_lora
 from ..shared.config import base_config
+from ..shared.config import adapter_format_for_backend, resolve_backend
 from ..shared.hashing import package_fingerprint, sha256
 from ..shared.io import read_json, read_yaml
 
@@ -23,6 +24,7 @@ class ResolvedAdapter:
     activation_cues: list[str]
     base_model: str | None
     fingerprint: str
+    adapter_format: str
 
 
 class AdapterRegistry:
@@ -79,6 +81,8 @@ class AdapterRegistry:
                 adapter = _resolved_adapter(package)
             except (FileNotFoundError, KeyError, TypeError, ValueError):
                 continue
+            if adapter.adapter_format != adapter_format_for_backend(resolve_backend(base_config())):
+                continue
             found[adapter.skill_id] = adapter
         return found
 
@@ -118,6 +122,7 @@ def _resolved_adapter(package: Path) -> ResolvedAdapter:
         activation_cues=_text_list(manifest.get("activation_cues")),
         base_model=(metadata.get("base") or {}).get("runtime_model"),
         fingerprint=package_fingerprint(manifest, metadata),
+        adapter_format=adapter.get("format") or (metadata.get("adapter") or {}).get("format") or "mlx-lora",
     )
 
 

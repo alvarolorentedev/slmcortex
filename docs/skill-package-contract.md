@@ -55,7 +55,8 @@ skillcortex route \
 ```text
 skills/python_skill/
 ├── adapter/
-│   ├── adapters.safetensors
+│   ├── adapters.safetensors   # MLX packages
+│   ├── adapter.gguf           # GGUF packages
 │   └── adapter_config.json
 ├── skill.yaml
 ├── README.md
@@ -65,7 +66,9 @@ skills/python_skill/
 └── examples.jsonl
 ```
 
-`examples.jsonl` is optional and is only written when supplied.
+`examples.jsonl` is optional and is only written when supplied. A package uses
+one adapter weight file: MLX packages use `adapter/adapters.safetensors`; GGUF
+packages use `adapter/adapter.gguf`.
 
 `skill.yaml` and `metadata.json` may also include a `composition` section.
 When present, it makes the package self-describing for package-first
@@ -237,6 +240,13 @@ Optional registry enrichment:
 Phase 3A Runtime Core consumes the emitted runtime bundle directly. It does not
 require registry state at startup or inference time.
 
+Runtime backend rules:
+
+- `backend: auto` resolves to MLX on macOS arm64/aarch64 and GGUF elsewhere.
+- MLX bundles require `mlx-lora` adapters and non-`.gguf` runtime model ids.
+- GGUF bundles require `gguf-lora` adapters and `.gguf` runtime model paths.
+- Composition rejects mixed MLX/GGUF packages.
+
 Validate a bundle before loading any model state:
 
 ```bash
@@ -303,5 +313,6 @@ Current Phase 3A limits:
 
 Product `train-skill` reuses the existing research training internals and is
 currently limited to the existing research skills exposed by the repository.
-It does not promote skills, update the registry, change router behavior, or
-rewrite accepted datasets or benchmark artifacts.
+MLX uses `mlx-lm`; GGUF uses PEFT plus llama.cpp LoRA conversion. It does not
+promote skills, update the registry, change router behavior, or rewrite
+accepted datasets or benchmark artifacts.

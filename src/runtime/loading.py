@@ -4,9 +4,10 @@ from pathlib import Path
 from typing import Any
 
 from ..contracts import TASK_TYPES
-from ..packaging import validate_skill_package
+from ..packaging.validation import validate_skill_package
 from ..shared.hashing import package_fingerprint, sha256
 from ..shared.io import read_json, read_yaml
+from ..shared.config import adapter_format_for_backend, validate_runtime_model
 from .models import REQUIRED_RUNTIME_FILES, RuntimeBundle, RuntimeSkill
 
 
@@ -32,12 +33,15 @@ def load_runtime_bundle(runtime_path: Path) -> RuntimeBundle:
     validate_active_skills(active_skills, skills, router_config.get("routes") or [])
 
     runtime = composition.get("runtime") or {}
+    backend = runtime.get("backend") or "mlx"
+    validate_runtime_model({"backend": backend, "model": runtime["runtime_model"]})
     return RuntimeBundle(
         path=root,
         name=root.name,
         runtime_model=runtime["runtime_model"],
         source_model=runtime["source_model"],
         quantization=runtime["quantization"],
+        backend=backend,
         strategy=composition["strategy"],
         routes=list(router_config["routes"]),
         skills=skills,
@@ -65,16 +69,22 @@ def load_runtime_skills(composition: dict[str, Any], checksums: dict[str, Any]) 
             raise ValueError(f"runtime checksum fingerprint mismatch for {item['skill_id']}")
         adapter_files = (metadata.get("adapter") or {}).get("files") or {}
         adapter_relative = adapter_files.get("weights") or "adapter/adapters.safetensors"
+        adapter_format = (metadata.get("adapter") or {}).get("format") or "mlx-lora"
+        backend = (metadata.get("base") or {}).get("backend") or "mlx"
+        if adapter_format != adapter_format_for_backend(backend):
+            raise ValueError(f"adapter format {adapter_format} is incompatible with backend {backend}")
+        adapter_weight = package_path / adapter_relative
         skills[item["skill_id"]] = RuntimeSkill(
             skill_id=item["skill_id"],
             name=item["name"],
             version=item["version"],
             package_path=package_path,
-            adapter_path=(package_path / adapter_relative).parent,
+            adapter_path=adapter_weight if adapter_format == "gguf-lora" else adapter_weight.parent,
             fingerprint=fingerprint,
             allowed_task_types=list(item["composition"]["capabilities"]["allowed_task_types"]),
             activation=dict(item["composition"]["activation"]),
             trainable_parameters=int(item["adapter"]["trainable_parameters"]),
+            adapter_format=adapter_format,
         )
     return skills
 

@@ -26,6 +26,7 @@ class RuntimeSkill:
     allowed_task_types: list[str]
     activation: dict[str, Any]
     trainable_parameters: int
+    adapter_format: str = "mlx-lora"
 
 
 @dataclass(slots=True)
@@ -35,6 +36,7 @@ class RuntimeBundle:
     runtime_model: str
     source_model: str
     quantization: str
+    backend: str
     strategy: str
     routes: list[dict[str, Any]]
     skills: dict[str, RuntimeSkill]
