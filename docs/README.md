@@ -1,6 +1,6 @@
 # User Documentation
 
-Start here if you want the shortest path to using Skill Cortex from the command line.
+Start here if you want the shortest path to using SLMCortex from the command line.
 
 ## Entry Points
 

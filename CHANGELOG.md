@@ -9,7 +9,7 @@ Versioning for public releases.
 
 ### Added
 
-- Public Skill Cortex README with a single product-first narrative
+- Public SLMCortex README with a single product-first narrative
 - Architecture overview and support matrix for first-time users
 - MIT license for the open-source v0.1 release
 - Contributing guide, issue templates, and pull request template
@@ -18,7 +18,7 @@ Versioning for public releases.
 
 ### Changed
 
-- Canonical public identity is now Skill Cortex in top-level docs and package
+- Canonical public identity is now SLMCortex in top-level docs and package
   metadata
 - Research workflows, reports, and experiment outputs were extracted into the
   separate `skill_lattice_coder_research` repository

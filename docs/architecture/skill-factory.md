@@ -1,6 +1,6 @@
 # Skill Factory
 
-Skill Factory is the packaging boundary for Skill Cortex v0.1. Its job is to
+Skill Factory is the packaging boundary for SLMCortex v0.1. Its job is to
 turn an existing adapter directory plus its provenance into a self-describing
 skill package without retraining a model or mutating the checked-in research
 artifacts.

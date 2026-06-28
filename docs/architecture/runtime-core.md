@@ -1,6 +1,6 @@
 # Runtime Core
 
-Runtime Core is the serving and local inference layer for Skill Cortex v0.1. It
+Runtime Core is the serving and local inference layer for SLMCortex v0.1. It
 loads a runtime bundle, validates its manifests and checksums, selects the
 route for a request, and either performs inference or returns a dry-run routing
 decision.

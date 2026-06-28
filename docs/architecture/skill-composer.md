@@ -1,6 +1,6 @@
 # Skill Composer
 
-Skill Composer is the deterministic assembly layer in Skill Cortex v0.1. It
+Skill Composer is the deterministic assembly layer in SLMCortex v0.1. It
 loads validated skill packages, checks compatibility, and writes a runtime
 bundle that Runtime Core can consume directly.
 

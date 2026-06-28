@@ -1,7 +1,7 @@
 # Agent Runtime
 
 Agent Runtime is the bounded local task runner layered on top of Runtime Core in
-Skill Cortex v0.1. It inspects a repository, asks Runtime Core for a plan and a
+SLMCortex v0.1. It inspects a repository, asks Runtime Core for a plan and a
 patch proposal, optionally materializes a file replacement, and can run one
 developer-supplied validation command.
 
