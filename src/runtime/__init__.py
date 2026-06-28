@@ -50,11 +50,13 @@ class SkillRuntime:
         dry_run: bool = False,
     ) -> dict[str, Any]:
         resolved_messages = normalize_messages(prompt=prompt, system=system, messages=messages)
-        decision = self.route(
-            messages=resolved_messages,
-            task_type=task_type,
-            semantic_family=semantic_family,
-            skill_override=skill_override,
+        decision = self._normalize_selected_skills(
+            self.route(
+                messages=resolved_messages,
+                task_type=task_type,
+                semantic_family=semantic_family,
+                skill_override=skill_override,
+            )
         )
         active_parameters = sum(
             self.bundle.skills[skill_id].trainable_parameters
@@ -116,6 +118,20 @@ class SkillRuntime:
             route_text=route_text,
         )
 
+    def _normalize_selected_skills(self, decision: RuntimeRouteDecision) -> RuntimeRouteDecision:
+        if self.bundle.backend != "gguf" or len(decision.selected_skills) <= 1:
+            return decision
+        selected = [decision.selected_skills[0]]
+        return RuntimeRouteDecision(
+            selected_skills=selected,
+            confidence=decision.confidence,
+            reason=(
+                f"{decision.reason}; gguf single-adapter fallback selected {selected[0]} "
+                "because adapter merge is not configured"
+            ),
+            route_type=decision.route_type,
+        )
+
     def chat_completion(self, payload: dict[str, Any]) -> dict[str, Any]:
         normalized = normalize_chat_request(payload, runtime_name=self.bundle.name)
         result = self.infer(
@@ -160,8 +176,6 @@ class SkillRuntime:
             if not adapter_paths:
                 model, tokenizer = load_model(model_name=self.bundle.runtime_model)
             elif self.bundle.backend == "gguf":
-                if len(adapter_paths) > 1:
-                    raise ValueError("GGUF runtime supports one active adapter until adapter merge is configured")
                 model, tokenizer = load_model(adapter=adapter_paths[0], model_name=self.bundle.runtime_model)
             else:
                 adapter_context = (

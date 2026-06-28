@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import hashlib
+import importlib
 import json
 import re
 import shutil
 import tempfile
 import threading
+import urllib.request
 from contextlib import nullcontext
 from dataclasses import dataclass
 from pathlib import Path
@@ -37,6 +39,30 @@ def train_skill_package(**kwargs):
     from ..packaging import train_skill_package as package_train_skill
 
     return package_train_skill(**kwargs)
+
+
+def _load_live_source_handler(handler: object) -> Callable[..., object]:
+    if callable(handler):
+        return handler
+    if not isinstance(handler, str) or not handler.strip():
+        raise ValueError("plasticity_live_source_handler must be a callable or module path")
+    module_name, sep, attr_name = handler.partition(":")
+    if not sep or not attr_name:
+        raise ValueError("plasticity_live_source_handler must use module:attribute syntax")
+    resolved = getattr(importlib.import_module(module_name), attr_name)
+    if not callable(resolved):
+        raise ValueError("plasticity_live_source_handler must resolve to a callable")
+    return resolved
+
+
+def _fetch_remote_lora_catalog(catalog_url: str) -> list[dict]:
+    with urllib.request.urlopen(catalog_url) as response:
+        payload = json.loads(response.read().decode("utf-8"))
+    if isinstance(payload, dict):
+        payload = payload.get("entries") or payload.get("remote_lora_catalog") or []
+    if not isinstance(payload, list):
+        raise ValueError("remote catalog payload must be a list of entries")
+    return [entry for entry in payload if isinstance(entry, dict)]
 
 
 class DynamicRuntime:
@@ -130,7 +156,22 @@ class DynamicRuntime:
             ]
             self.reload()
             decision.selected_skills = [skill.skill_id for skill in resolved]
+        self._normalize_selected_skills(decision)
         return decision
+
+    def _normalize_selected_skills(self, decision: DynamicRouteDecision) -> None:
+        if len(decision.selected_skills) <= 1:
+            return
+        selected = [self.skills[skill_id] for skill_id in decision.selected_skills if skill_id in self.skills]
+        if not selected or any(skill.adapter_format != "gguf-lora" for skill in selected):
+            return
+        decision.selected_skills = [selected[0].skill_id]
+        if decision.remote_loras:
+            decision.remote_loras = decision.remote_loras[:1]
+        decision.reason = (
+            f"{decision.reason}; gguf single-adapter fallback selected {selected[0].skill_id} "
+            "because adapter merge is not configured"
+        )
 
     def _get_model(self, base_model: str, selected_skills: tuple[str, ...]) -> tuple[object, object]:
         key = (
@@ -155,8 +196,6 @@ class DynamicRuntime:
             if not adapter_paths:
                 model, tokenizer = load_model(model_name=base_model)
             elif self.skills[selected_skills[0]].adapter_format == "gguf-lora":
-                if len(adapter_paths) > 1:
-                    raise ValueError("GGUF runtime supports one active adapter until adapter merge is configured")
                 model, tokenizer = load_model(adapter=adapter_paths[0], model_name=base_model)
             else:
                 adapter_context = (
@@ -203,7 +242,11 @@ class DynamicRuntime:
 
     def _remote_catalog_match(self, words: set[str], config: dict) -> tuple[list[str], list[str]]:
         scored = []
-        for entry in config.get("remote_lora_catalog") or []:
+        remote_entries = list(config.get("remote_lora_catalog") or [])
+        catalog_url = config.get("remote_lora_catalog_url")
+        if isinstance(catalog_url, str) and catalog_url.strip():
+            remote_entries.extend(_fetch_remote_lora_catalog(catalog_url))
+        for entry in remote_entries:
             if not isinstance(entry, dict):
                 continue
             skill_id = entry.get("skill_id")
@@ -269,10 +312,20 @@ class DynamicRuntime:
             if existing >= int(limit):
                 raise ValueError("plasticity skill cap reached")
         fallback_train_dataset = config.get("plasticity_train_dataset")
+        live_source_handler = config.get("plasticity_live_source_handler")
         with tempfile.TemporaryDirectory(prefix=f"skillcortex-{skill_id}-publish-") as directory:
             train_dataset = Path(directory) / "task-train.jsonl"
             if text.strip():
                 train_dataset.write_text(json.dumps(train_row, sort_keys=True) + "\n")
+            elif live_source_handler:
+                handler = _load_live_source_handler(live_source_handler)
+                rows = handler(messages=messages, decision=decision, skill_id=skill_id)
+                serialized_rows = []
+                for row in rows:
+                    serialized_rows.append(json.dumps(row, sort_keys=True))
+                if not serialized_rows:
+                    raise ValueError("plasticity live source returned no training rows")
+                train_dataset.write_text("\n".join(serialized_rows) + "\n")
             elif fallback_train_dataset:
                 train_dataset = Path(fallback_train_dataset)
             else:

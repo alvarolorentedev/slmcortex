@@ -1,9 +1,11 @@
 import io
 import json
 from contextlib import contextmanager
+from pathlib import Path
 
 from skillcortex.cli import main
 from skillcortex.runtime import OpenAICompatApp, SkillRuntime
+from skillcortex.runtime.models import RuntimeBundle, RuntimeRouteDecision, RuntimeSkill
 
 
 def _compose_runtime(tmp_path):
@@ -194,6 +196,75 @@ def test_runtime_non_dry_run_calls_backend_seams(tmp_path, monkeypatch):
     ]
     assert calls["generate_text"]["max_tokens"] == 33
     assert calls["generate_text"]["temperature"] == 0.2
+
+
+def test_runtime_gguf_multi_adapter_falls_back_to_first_skill(tmp_path, monkeypatch):
+    runtime = SkillRuntime(
+        RuntimeBundle(
+            path=tmp_path,
+            name="runtime",
+            runtime_model="model.gguf",
+            source_model="source",
+            quantization="q4",
+            backend="gguf",
+            strategy="routed",
+            routes=[],
+            skills={
+                "debugging_skill": RuntimeSkill(
+                    skill_id="debugging_skill",
+                    name="Debugging Skill",
+                    version="0.1.0",
+                    package_path=tmp_path / "debugging_skill",
+                    adapter_path=tmp_path / "debugging_skill" / "adapter.gguf",
+                    fingerprint="debugging",
+                    allowed_task_types=["debugging"],
+                    activation={},
+                    trainable_parameters=10,
+                    adapter_format="gguf-lora",
+                ),
+                "python_skill": RuntimeSkill(
+                    skill_id="python_skill",
+                    name="Python Skill",
+                    version="0.1.0",
+                    package_path=tmp_path / "python_skill",
+                    adapter_path=tmp_path / "python_skill" / "adapter.gguf",
+                    fingerprint="python",
+                    allowed_task_types=["python_generation"],
+                    activation={},
+                    trainable_parameters=20,
+                    adapter_format="gguf-lora",
+                ),
+            },
+            compatibility_report={},
+            budget_report={},
+            checksums={},
+        )
+    )
+    monkeypatch.setattr(
+        runtime,
+        "route",
+        lambda **kwargs: RuntimeRouteDecision(
+            selected_skills=["debugging_skill", "python_skill"],
+            confidence=1.0,
+            reason="task_type=debugging matched debugging and python",
+            route_type="adapter",
+        ),
+    )
+    calls = {}
+
+    def fake_load_model(adapter=None, model_name=None):
+        calls["adapter"] = Path(adapter) if adapter else None
+        calls["model_name"] = model_name
+        return "gguf-model", None
+
+    monkeypatch.setattr("skillcortex.runtime.load_model", fake_load_model)
+    monkeypatch.setattr("skillcortex.runtime.generate_text", lambda *args, **kwargs: ("answer", 0, 0))
+
+    result = runtime.infer(prompt="Fix a traceback")
+
+    assert result["selected_skills"] == ["debugging_skill"]
+    assert "gguf single-adapter fallback selected debugging_skill" in result["reason"]
+    assert calls["adapter"] == runtime.bundle.skills["debugging_skill"].adapter_path
 
 
 def test_runtime_infer_supports_request_file(tmp_path, capsys):
