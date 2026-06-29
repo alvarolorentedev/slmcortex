@@ -62,6 +62,31 @@ def test_dynamic_infer_dry_run_selects_matching_lora(tmp_path, capsys):
     assert output["selected_slms"] == ["fastapi_slm"]
 
 
+def test_dynamic_serve_dry_run_accepts_slms_dir(tmp_path, capsys):
+    _slm(tmp_path, "fastapi_slm", description="FastAPI endpoint validation", capabilities=["fastapi"])
+
+    assert (
+        main(
+            [
+                "serve",
+                "--slms-dir",
+                str(tmp_path / "slms"),
+                "--host",
+                "127.0.0.1",
+                "--port",
+                "8001",
+                "--dry-run",
+            ]
+        )
+        == 0
+    )
+
+    output = json.loads(capsys.readouterr().out)
+    assert output["status"] == "dry-run"
+    assert output["runtime"] == "dynamic"
+    assert output["slms"] == ["fastapi_slm"]
+
+
 def test_dynamic_infer_dry_run_falls_back_to_base(tmp_path, capsys):
     _slm(tmp_path, "sql_slm", description="SQL query tuning", capabilities=["sql"])
 
@@ -82,6 +107,31 @@ def test_dynamic_infer_dry_run_falls_back_to_base(tmp_path, capsys):
     output = json.loads(capsys.readouterr().out)
     assert output["selected_slms"] == []
     assert output["reason"] == "base fallback"
+
+
+def test_dynamic_runtime_chat_completion_uses_openai_compat_shape(tmp_path, monkeypatch):
+    _slm(tmp_path, "fastapi_slm", description="FastAPI endpoint validation", capabilities=["fastapi"])
+    runtime = DynamicRuntime.load(tmp_path / "slms")
+
+    monkeypatch.setattr(
+        runtime,
+        "infer",
+        lambda **kwargs: {
+            "generation": "dynamic response",
+            "prompt_tokens": 3,
+            "generated_tokens": 5,
+        },
+    )
+
+    payload = {
+        "model": "dynamic",
+        "messages": [{"role": "user", "content": "Fix a FastAPI validation bug"}],
+    }
+    completion = runtime.chat_completion(payload)
+
+    assert completion["model"] == "dynamic"
+    assert completion["choices"][0]["message"]["content"] == "dynamic response"
+    assert completion["usage"]["total_tokens"] == 8
 
 
 def test_dynamic_infer_dry_run_selects_remote_catalog_match(tmp_path, monkeypatch, capsys):

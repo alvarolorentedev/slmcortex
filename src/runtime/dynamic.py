@@ -11,13 +11,14 @@ import urllib.request
 from contextlib import nullcontext
 from dataclasses import dataclass
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Callable
 
 from ..composer.adapters import temporary_composed_adapter
 from ..packaging.validation import validate_slm_package
 from ..shared.config import base_config
 from .generation import generate_text, load_model
-from .request import normalize_messages
+from .request import normalize_chat_request, normalize_messages
 from .registry import AdapterRegistry, ResolvedAdapter
 
 
@@ -69,6 +70,7 @@ class DynamicRuntime:
     def __init__(self, registry: AdapterRegistry):
         self.registry = registry
         self.slms = registry.local
+        self.bundle = SimpleNamespace(name="dynamic")
         self._cache: dict[tuple[str, tuple[str, ...]], tuple[object, object]] = {}
         self._lock = threading.Lock()
 
@@ -135,6 +137,35 @@ class DynamicRuntime:
             }
         )
         return result
+
+    def chat_completion(self, payload: dict) -> dict:
+        normalized = normalize_chat_request(payload, runtime_name=self.bundle.name)
+        result = self.infer(
+            messages=normalized["messages"],
+            max_tokens=normalized["max_tokens"],
+            temperature=normalized["temperature"],
+            dry_run=False,
+        )
+        prompt_tokens = result.get("prompt_tokens") or 0
+        generated_tokens = result.get("generated_tokens") or 0
+        return {
+            "id": f"chatcmpl-slmcortex-{hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()[:12]}",
+            "object": "chat.completion",
+            "created": 0,
+            "model": self.bundle.name,
+            "choices": [
+                {
+                    "index": 0,
+                    "message": {"role": "assistant", "content": result["generation"]},
+                    "finish_reason": "stop",
+                }
+            ],
+            "usage": {
+                "prompt_tokens": prompt_tokens,
+                "completion_tokens": generated_tokens,
+                "total_tokens": prompt_tokens + generated_tokens,
+            },
+        }
 
     def route(
         self,

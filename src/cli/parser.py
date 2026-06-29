@@ -275,12 +275,16 @@ def _add_serve_parser(commands) -> None:
     serve = commands.add_parser(
         "serve",
         **parser_kwargs(
-            "Start the minimal OpenAI-compatible server for a runtime bundle.",
+            "Start the minimal OpenAI-compatible server for a runtime bundle or SLM directory.",
             "slmcortex serve --runtime /tmp/slmcortex-demo/runtime --host 127.0.0.1 --port 8000\n"
+            "slmcortex serve --slms-dir slms --host 127.0.0.1 --port 8000 --dry-run\n"
             "slmcortex serve --runtime /tmp/slmcortex-demo/runtime --dry-run",
         ),
     )
-    serve.add_argument("--runtime", required=True)
+    serve.add_argument("--runtime")
+    serve.add_argument("--slms-dir", dest="slms_dir")
+    serve.add_argument("--allow-remote-loras", action="store_true")
+    serve.add_argument("--lora-cache-dir")
     serve.add_argument("--host", default="127.0.0.1")
     serve.add_argument("--port", type=int, default=8000)
     serve.add_argument("--dry-run", action="store_true")

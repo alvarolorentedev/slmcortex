@@ -493,20 +493,24 @@ without building a runtime first.
 
 ## `serve`
 
-Start the minimal OpenAI-compatible server for a runtime bundle.
+Start the minimal OpenAI-compatible server for a runtime bundle or SLM directory.
 
-Required flags:
+Required input:
 
-- `--runtime`
+- exactly one of `--runtime` or `--slms-dir`
 
 Optional flags:
 
+- `--allow-remote-loras` when serving from `--slms-dir`
+- `--lora-cache-dir` when serving from `--slms-dir`
 - `--host` defaults to `127.0.0.1`
 - `--port` defaults to `8000`
 - `--dry-run`
 
 Behavior:
 
+- runtime mode serves an already composed runtime bundle
+- slms-dir mode serves directly from discovered slm packages
 - `--dry-run` validates the serving configuration without starting the server
 - non-dry-run mode starts a blocking local HTTP server
 
@@ -514,9 +518,11 @@ Example:
 
 ```bash
 slmcortex serve --runtime /tmp/slmcortex-demo/runtime --host 127.0.0.1 --port 8000
+slmcortex serve --slms-dir slms --allow-remote-loras --dry-run
 ```
 
 Use `--dry-run` to check the serving configuration without starting the server.
+Use `--slms-dir` when you want the folder-based runtime path without composing a bundle first.
 Use the real server mode when you want a drop-in compatibility endpoint.
 
 ## `agent`

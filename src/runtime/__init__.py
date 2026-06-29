@@ -198,21 +198,47 @@ def validate_runtime_bundle(runtime_path: Path) -> dict[str, Any]:
 
 def serve_runtime(
     *,
-    runtime_path: Path,
+    runtime_path: Path | None,
+    slms_dir: Path | None,
+    allow_remote_loras: bool = False,
+    cache_dir: Path | None = None,
     host: str,
     port: int,
     dry_run: bool = False,
 ) -> dict[str, Any]:
-    runtime = SlmRuntime.load(runtime_path)
+    if bool(runtime_path) == bool(slms_dir):
+        raise ValueError("serve requires exactly one of runtime_path or slms_dir")
+    runtime = (
+        SlmRuntime.load(runtime_path)
+        if runtime_path is not None
+        else DynamicRuntime.load(
+            slms_dir,
+            allow_remote_loras=allow_remote_loras,
+            cache_dir=cache_dir,
+        )
+    )
     if dry_run:
-        return {
+        response = {
             "status": "dry-run",
             "runtime": runtime.bundle.name,
             "host": host,
             "port": port,
-            "model": runtime.bundle.runtime_model,
-            "slms": sorted(runtime.bundle.slms),
         }
+        if isinstance(runtime, SlmRuntime):
+            response.update(
+                {
+                    "model": runtime.bundle.runtime_model,
+                    "slms": sorted(runtime.bundle.slms),
+                }
+            )
+        else:
+            response.update(
+                {
+                    "slms_dir": str(slms_dir.resolve()),
+                    "slms": sorted(runtime.slms),
+                }
+            )
+        return response
     app = OpenAICompatApp(runtime)
     with make_server(host, port, app) as server:
         print(f"Serving SlmCortex runtime '{runtime.bundle.name}' on http://{host}:{port}")

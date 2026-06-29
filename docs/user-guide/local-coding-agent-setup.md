@@ -142,6 +142,17 @@ Look for fields such as:
 
 These tell you whether the runtime used a local slm, fetched a remote LoRA, trained a plasticity adapter, or fell back to the base model.
 
+If you want the OpenAI-compatible API without prebuilding a runtime bundle, use the same `--slms-dir` path:
+
+```bash
+python -m slmcortex serve \
+  --slms-dir .slmcortex/prototype-slms \
+  --allow-remote-loras \
+  --dry-run
+```
+
+Then start the real server without `--dry-run` when the route looks sane.
+
 ## 7. Point it at your repository
 
 Once direct inference looks sane, use the bounded agent path.
@@ -182,6 +193,7 @@ python scripts/run_dynamic_adaptive_smoke.py
 export SLMCORTEX_BASE_CONFIG=configs/prototype.yaml
 python scripts/run_dynamic_adaptive_smoke.py --real
 python -m slmcortex infer --slms-dir .slmcortex/prototype-slms --prompt "Fix a FastAPI validation bug" --allow-remote-loras --dry-run
+python -m slmcortex serve --slms-dir .slmcortex/prototype-slms --allow-remote-loras --dry-run
 python -m slmcortex agent run --slms-dir .slmcortex/prototype-slms --repo /path/to/your/repo --task "Fix the failing answer implementation." --dry-run
 ```
 

@@ -204,8 +204,13 @@ def execute_command(
             dry_run=parsed.dry_run,
         )
     if parsed.command == "serve":
+        if bool(parsed.runtime) == bool(parsed.slms_dir):
+            raise ValueError("serve requires exactly one of --runtime or --slms-dir")
         return serve_runtime(
-            runtime_path=Path(parsed.runtime),
+            runtime_path=Path(parsed.runtime) if parsed.runtime else None,
+            slms_dir=Path(parsed.slms_dir) if parsed.slms_dir else None,
+            allow_remote_loras=parsed.allow_remote_loras,
+            cache_dir=Path(parsed.lora_cache_dir) if parsed.lora_cache_dir else None,
             host=parsed.host,
             port=parsed.port,
             dry_run=parsed.dry_run,
