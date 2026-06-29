@@ -59,7 +59,7 @@ def _demo_slms(root: Path) -> Path:
     package_slm(
         slm_id="fastapi_slm",
         name="FastAPI Slm",
-        adapter_dir=Path("artifacts/adapters/python_slm"),
+        adapter_dir=Path("artifacts/ci/adapters/python_slm"),
         output=root / "slms" / "fastapi_slm",
         train_dataset=Path("data/train.jsonl"),
         eval_dataset=Path("data/eval.jsonl"),

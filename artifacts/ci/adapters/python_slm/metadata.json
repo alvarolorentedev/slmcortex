@@ -1,0 +1,29 @@
+{
+  "adapter": "python_slm",
+  "base_model": "mlx-community/Qwen2.5-Coder-1.5B-Instruct-4bit",
+  "source_model": "Qwen/Qwen2.5-Coder-1.5B-Instruct",
+  "quantization": "4bit",
+  "dataset_size": 60,
+  "dataset_hash": "7094d60baf3c1a62ad389110572df044b43a606bbefdff8cea91e4212858bf96",
+  "rank": 8,
+  "target_modules": [
+    "self_attn.q_proj",
+    "self_attn.v_proj"
+  ],
+  "seed": 42,
+  "elapsed_seconds": 40.26023075000012,
+  "trainable_parameters": 311296,
+  "config": {
+    "seed": 42,
+    "batch_size": 1,
+    "iterations": 100,
+    "learning_rate": 0.0001,
+    "lora_layers": 8,
+    "slm_rank": 8,
+    "generic_rank": 24,
+    "target_modules": [
+      "self_attn.q_proj",
+      "self_attn.v_proj"
+    ]
+  }
+}

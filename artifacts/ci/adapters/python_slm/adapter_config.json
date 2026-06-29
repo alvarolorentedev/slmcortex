@@ -1,0 +1,45 @@
+{
+    "adapter_path": "/Users/alvarolorente/workspace/crazy-coding-llm/artifacts/adapters/python_slm",
+    "batch_size": 1,
+    "clear_cache_threshold": 0,
+    "config": "/var/folders/38/98k8592j65j_5hw7mssz90k00000gn/T/slm-lattice-python_slm-wz_2964l/data/training-rank-8.yaml",
+    "data": "/var/folders/38/98k8592j65j_5hw7mssz90k00000gn/T/slm-lattice-python_slm-wz_2964l/data",
+    "fine_tune_type": "lora",
+    "grad_accumulation_steps": 1,
+    "grad_checkpoint": false,
+    "iters": 100,
+    "learning_rate": 0.0001,
+    "lora_parameters": {
+        "rank": 8,
+        "dropout": 0.0,
+        "scale": 20.0,
+        "keys": [
+            "self_attn.q_proj",
+            "self_attn.v_proj"
+        ]
+    },
+    "lr_schedule": null,
+    "mask_prompt": true,
+    "max_seq_length": 2048,
+    "model": "mlx-community/Qwen2.5-Coder-1.5B-Instruct-4bit",
+    "num_layers": 8,
+    "optimizer": "adam",
+    "optimizer_config": {
+        "adam": {},
+        "adamw": {},
+        "muon": {},
+        "sgd": {},
+        "adafactor": {}
+    },
+    "project_name": null,
+    "report_to": null,
+    "resume_adapter_file": null,
+    "save_every": 100,
+    "seed": 42,
+    "steps_per_eval": 200,
+    "steps_per_report": 10,
+    "test": false,
+    "test_batches": 500,
+    "train": true,
+    "val_batches": 25
+}
