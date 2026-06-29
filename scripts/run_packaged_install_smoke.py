@@ -6,7 +6,14 @@ import sys
 import tempfile
 from pathlib import Path
 
-from slmcortex.packaging.artifacts import package_checksums
+from slmcortex.packaging.artifacts import adapter_weights_path, package_checksums
+from slmcortex.shared.config import (
+    adapter_format_for_backend,
+    adapter_weight_name_for_format,
+    base_config,
+    resolve_backend,
+    training_config,
+)
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -52,7 +59,7 @@ def main(argv: list[str] | None = None) -> int:
         if parsed.workspace_root
         else Path(tempfile.mkdtemp(prefix="slmcortex-installed-workspace-"))
     )
-    adapter_dir = ROOT / "artifacts" / "adapters" / "python_slm"
+    adapter_dir = _resolve_smoke_adapter_dir(workspace_root)
     installer_path, launcher_path, composer_launcher_path = _installer_contract(install_root)
     env = dict(os.environ)
     env["SLMCORTEX_INSTALL_ROOT"] = str(install_root)
@@ -95,41 +102,35 @@ def main(argv: list[str] | None = None) -> int:
             ],
         )
     )
-    if adapter_dir.exists():
-        steps.append(
-            _run(
-                "package_fastapi_contract",
-                [
-                    str(launcher_path),
-                    "package-slm",
-                    "--slm-id",
-                    "fastapi_contract",
-                    "--name",
-                    "FastAPI Contract Slm",
-                    "--adapter-dir",
-                    str(adapter_dir),
-                    "--output",
-                    str(package_path),
-                    "--train-dataset",
-                    str(ROOT / "data" / "train.jsonl"),
-                    "--eval-dataset",
-                    str(ROOT / "data" / "eval.jsonl"),
-                    "--eval-summary",
-                    str(FIXTURES / "eval-summary.json"),
-                    "--description",
-                    "FastAPI endpoints with Pydantic validation.",
-                    "--allowed-task-types",
-                    "python_generation",
-                    "--activation-scope",
-                    "task",
-                ],
-            )
+    steps.append(
+        _run(
+            "package_fastapi_contract",
+            [
+                str(launcher_path),
+                "package-slm",
+                "--slm-id",
+                "fastapi_contract",
+                "--name",
+                "FastAPI Contract Slm",
+                "--adapter-dir",
+                str(adapter_dir),
+                "--output",
+                str(package_path),
+                "--train-dataset",
+                str(ROOT / "data" / "train.jsonl"),
+                "--eval-dataset",
+                str(ROOT / "data" / "eval.jsonl"),
+                "--eval-summary",
+                str(FIXTURES / "eval-summary.json"),
+                "--description",
+                "FastAPI endpoints with Pydantic validation.",
+                "--allowed-task-types",
+                "python_generation",
+                "--activation-scope",
+                "task",
+            ],
         )
-    else:
-        print(
-            f"Skipping package_fastapi_contract smoke case; adapter weights not found at {adapter_dir}",
-            file=sys.stderr,
-        )
+    )
     _enrich_fastapi_package(package_path)
     steps.append(
         _run(
@@ -194,6 +195,39 @@ def _copy_demo_repo(destination: Path) -> Path:
         "from fastapi import FastAPI\nfrom pydantic import BaseModel\n"
     )
     return destination
+
+
+def _resolve_smoke_adapter_dir(workspace_root: Path) -> Path:
+    adapter_dir = ROOT / "artifacts" / "adapters" / "python_slm"
+    try:
+        adapter_weights_path(adapter_dir)
+        return adapter_dir
+    except FileNotFoundError:
+        fallback = workspace_root / ".smoke-adapter"
+        backend = resolve_backend(base_config())
+        adapter_format = adapter_format_for_backend(backend)
+        fallback.mkdir(parents=True, exist_ok=True)
+        fallback.joinpath(adapter_weight_name_for_format(adapter_format)).write_bytes(
+            b"slmcortex smoke adapter\n"
+        )
+        fallback.joinpath("adapter_config.json").write_text("{}\n")
+        fallback.joinpath("metadata.json").write_text(
+            json.dumps(
+                {
+                    "backend": backend,
+                    "format": adapter_format,
+                    "seed": int(training_config()["seed"]),
+                },
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n"
+        )
+        print(
+            f"Using synthetic smoke adapter at {fallback} because adapter weights were not found at {adapter_dir}",
+            file=sys.stderr,
+        )
+        return fallback
 
 
 def _enrich_fastapi_package(package_path: Path) -> None:
