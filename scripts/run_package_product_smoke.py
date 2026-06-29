@@ -93,7 +93,7 @@ def main(argv: list[str] | None = None) -> int:
                 "--name",
                 "FastAPI Contract Slm",
                 "--adapter-dir",
-                "artifacts/adapters/python_slm",
+                "artifacts/ci/adapters/python_slm",
                 "--train-dataset",
                 "data/train.jsonl",
                 "--eval-dataset",
