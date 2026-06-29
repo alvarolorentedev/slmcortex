@@ -43,3 +43,42 @@ def test_train_plasticity_lora_publishes_atomically(tmp_path, monkeypatch, capsy
     assert output["status"] == "complete"
     assert output["validation_status"] == "valid"
     assert (tmp_path / "slms" / "local_fix" / "slm.yaml").exists()
+
+
+def test_factory_train_plasticity_lora_blocks_when_optional_training_dependencies_are_missing(
+    tmp_path, monkeypatch, capsys
+):
+    monkeypatch.setattr(
+        "slmcortex.cli.handlers.environment_diagnostics",
+        lambda **kwargs: {
+            "optional_factory_dependencies": [
+                {"name": "torch", "available": False},
+                {"name": "transformers", "available": False},
+            ]
+        },
+    )
+    monkeypatch.setattr(
+        "slmcortex.cli.handlers.train_slm_package",
+        lambda **kwargs: (_ for _ in ()).throw(AssertionError("should not train")),
+    )
+
+    assert (
+        main(
+            [
+                "factory",
+                "train-plasticity-lora",
+                "--slm-id",
+                "local_fix",
+                "--name",
+                "Local Fix",
+                "--prompt-file",
+                "data/train.jsonl",
+                "--eval-dataset",
+                "data/eval.jsonl",
+                "--publish-dir",
+                str(tmp_path / "slms"),
+            ]
+        )
+        == 2
+    )
+    assert "factory mode prerequisites missing for training workflows" in capsys.readouterr().err

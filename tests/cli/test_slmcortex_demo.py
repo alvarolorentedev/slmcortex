@@ -31,11 +31,12 @@ def test_slmcortex_root_help_lists_product_commands_and_examples():
     assert "provision-backend" in completed.stdout
     assert "composer-app" in completed.stdout
     assert "compose-folder" in completed.stdout
-    assert "package-slm" in completed.stdout
+    assert "factory" in completed.stdout
     assert "compose-slms" in completed.stdout
     assert "validate-runtime" in completed.stdout
     assert "agent" in completed.stdout
     assert "Examples:" in completed.stdout
+    assert "slmcortex factory" in completed.stdout
 
 
 def test_slmcortex_product_help_examples_cover_every_command():
@@ -44,6 +45,9 @@ def test_slmcortex_product_help_examples_cover_every_command():
         ("provision-backend", "--help"): "slmcortex provision-backend --backend mlx --dry-run",
         ("composer-app", "--help"): "slmcortex composer-app --folder . --task",
         ("compose-folder", "--help"): "slmcortex compose-folder --folder . --task",
+        ("factory", "--help"): "slmcortex factory generate-dataset --slm-id fastapi_contract --domain fastapi",
+        ("factory", "doctor", "--help"): "slmcortex doctor --workspace",
+        ("factory", "train-slm", "--help"): "slmcortex train-slm --slm-id fastapi_contract",
         ("train-slm", "--help"): "slmcortex train-slm --slm-id fastapi_contract",
         ("package-slm", "--help"): "slmcortex package-slm --slm-id python_slm",
         ("validate-slm-package", "--help"): "slmcortex validate-slm-package --path",

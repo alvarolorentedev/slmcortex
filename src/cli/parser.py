@@ -11,6 +11,19 @@ from ..shared.product import PRODUCT_MODES
 from .common import COMPOSITION_SCOPES, parser_kwargs
 
 
+FACTORY_COMMAND_DESCRIPTION = dedent(
+    """
+    Advanced Factory mode exposes dataset generation, validation, training,
+    packaging, and import workflows without changing the default Composer path.
+
+    Prerequisites:
+    - dataset generation and validation work in the base install
+    - training workflows require optional local training dependencies
+    - imported or trained packages remain compatible with Composer discovery
+    """
+).strip()
+
+
 def build_parser() -> argparse.ArgumentParser:
     root = argparse.ArgumentParser(
         prog="slmcortex",
@@ -20,7 +33,8 @@ def build_parser() -> argparse.ArgumentParser:
                 """
                 slmcortex doctor
                 slmcortex compose-folder --folder . --task "Create a FastAPI endpoint with request validation"
-                slmcortex package-slm --slm-id python_slm --name \"Python Slm\" --adapter-dir artifacts/adapters/python_slm --train-dataset tests/fixtures/slmcortex_demo/train.jsonl --eval-dataset tests/fixtures/slmcortex_demo/eval.jsonl --eval-summary tests/fixtures/slmcortex_demo/eval-summary.json --output /tmp/slmcortex-demo/python_slm
+                slmcortex factory doctor
+                slmcortex factory package-slm --slm-id python_slm --name "Python Slm" --adapter-dir artifacts/adapters/python_slm --train-dataset tests/fixtures/slmcortex_demo/train.jsonl --eval-dataset tests/fixtures/slmcortex_demo/eval.jsonl --eval-summary tests/fixtures/slmcortex_demo/eval-summary.json --output /tmp/slmcortex-demo/python_slm
                 slmcortex compose-slms --slms /tmp/slmcortex-demo/python_slm,/tmp/slmcortex-demo/debugging_slm --strategy routed --output /tmp/slmcortex-demo/runtime
                 slmcortex compose-from-route --slms-dir slms --repo . --task "Create a FastAPI endpoint" --runtime-out /tmp/slmcortex-demo/runtime
                 slmcortex validate-runtime --runtime /tmp/slmcortex-demo/runtime
@@ -31,7 +45,15 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     root.add_argument("--product-mode", choices=PRODUCT_MODES, default="composer")
-    commands = root.add_subparsers(dest="command", required=True, title="product commands")
+    commands = root.add_subparsers(
+        dest="command",
+        required=True,
+        title="product commands",
+        metavar=(
+            "{doctor,provision-backend,composer-app,compose-folder,validate-runtime,route,"
+            "compose-from-route,infer,serve,agent,factory,compose-slms}"
+        ),
+    )
     _add_doctor_parser(commands)
     _add_provision_backend_parser(commands)
     _add_composer_app_parser(commands)
@@ -42,15 +64,48 @@ def build_parser() -> argparse.ArgumentParser:
     _add_infer_parser(commands)
     _add_serve_parser(commands)
     _add_agent_parser(commands)
-    _add_generate_dataset_parser(commands)
-    _add_validate_dataset_parser(commands)
-    _add_train_slm_parser(commands)
-    _add_train_plasticity_lora_parser(commands)
-    _add_import_lora_parser(commands)
-    _add_package_slm_parser(commands)
-    _add_validate_slm_package_parser(commands)
+    _add_factory_parser(commands)
+    _add_generate_dataset_parser(commands, hidden=True)
+    _add_validate_dataset_parser(commands, hidden=True)
+    _add_train_slm_parser(commands, hidden=True)
+    _add_train_plasticity_lora_parser(commands, hidden=True)
+    _add_import_lora_parser(commands, hidden=True)
+    _add_package_slm_parser(commands, hidden=True)
+    _add_validate_slm_package_parser(commands, hidden=True)
     _add_compose_slms_parser(commands)
+    commands._choices_actions = [
+        action for action in commands._choices_actions if action.help != argparse.SUPPRESS
+    ]
     return root
+
+
+def _factory_parser_kwargs(description: str, examples: str | None = None, *, hidden: bool = False) -> dict:
+    kwargs = parser_kwargs(description, examples)
+    kwargs["help"] = argparse.SUPPRESS if hidden else description.splitlines()[0]
+    return kwargs
+
+
+def _add_factory_parser(commands) -> None:
+    factory = commands.add_parser(
+        "factory",
+        **parser_kwargs(
+            FACTORY_COMMAND_DESCRIPTION,
+            "slmcortex factory doctor\n"
+            "slmcortex factory generate-dataset --slm-id fastapi_contract --domain fastapi\n"
+            "slmcortex factory train-slm --slm-id fastapi_contract --name \"FastAPI Contract Slm\" --train-dataset datasets/fastapi_contract/train.jsonl --eval-dataset datasets/fastapi_contract/eval.jsonl --output slms/fastapi_contract",
+            summary="Advanced Factory: enter dataset, training, packaging, and import workflows explicitly.",
+        ),
+    )
+    factory.set_defaults(product_mode="factory")
+    factory_commands = factory.add_subparsers(dest="factory_command", required=True, title="advanced factory commands")
+    _add_doctor_parser(factory_commands)
+    _add_generate_dataset_parser(factory_commands)
+    _add_validate_dataset_parser(factory_commands)
+    _add_train_slm_parser(factory_commands)
+    _add_train_plasticity_lora_parser(factory_commands)
+    _add_import_lora_parser(factory_commands)
+    _add_package_slm_parser(factory_commands)
+    _add_validate_slm_package_parser(factory_commands)
 
 
 def _add_doctor_parser(commands) -> None:
@@ -135,14 +190,14 @@ def _add_compose_from_folder_parser(commands) -> None:
     compose.add_argument("--overwrite", action="store_true")
 
 
-def _add_generate_dataset_parser(commands) -> None:
+def _add_generate_dataset_parser(commands, *, hidden: bool = False) -> None:
     generate = commands.add_parser(
         "generate-dataset",
-        **parser_kwargs(
+        **_factory_parser_kwargs(
             "Generate a deterministic train/eval JSONL dataset for product train-slm.",
             "slmcortex generate-dataset --slm-id fastapi_contract --domain fastapi\n"
             "slmcortex generate-dataset --slm-id fastapi_contract --domain fastapi --task-type python_generation --num-examples 120 --output custom/train.jsonl --eval-output custom/eval.jsonl --seed 99",
-            summary="Advanced Factory: generate datasets for training and packaging.",
+            hidden=hidden,
         ),
     )
     generate.add_argument("--slm-id", required=True)
@@ -156,13 +211,13 @@ def _add_generate_dataset_parser(commands) -> None:
     generate.add_argument("--report-output")
 
 
-def _add_validate_dataset_parser(commands) -> None:
+def _add_validate_dataset_parser(commands, *, hidden: bool = False) -> None:
     validate_dataset = commands.add_parser(
         "validate-dataset",
-        **parser_kwargs(
+        **_factory_parser_kwargs(
             "Validate product training datasets and emit a machine-readable report.",
             "slmcortex validate-dataset datasets/fastapi_contract/train.jsonl --eval-dataset datasets/fastapi_contract/eval.jsonl",
-            summary="Advanced Factory: validate training datasets before authoring.",
+            hidden=hidden,
         ),
     )
     validate_dataset.add_argument("dataset")
@@ -171,14 +226,14 @@ def _add_validate_dataset_parser(commands) -> None:
     validate_dataset.add_argument("--report-output")
 
 
-def _add_train_slm_parser(commands) -> None:
+def _add_train_slm_parser(commands, *, hidden: bool = False) -> None:
     train = commands.add_parser(
         "train-slm",
-        **parser_kwargs(
+        **_factory_parser_kwargs(
             "Train a LoRA slm from datasets and package it as a Slm Cortex artifact.",
             "slmcortex train-slm --slm-id fastapi_contract --name \"FastAPI Contract Slm\" --train-dataset datasets/fastapi_contract/train.jsonl --eval-dataset datasets/fastapi_contract/eval.jsonl --output slms/fastapi_contract\n"
             "slmcortex train-slm python_slm --output slms/python_slm_run --force",
-            summary="Advanced Factory: train and package a new slm.",
+            hidden=hidden,
         ),
     )
     train.add_argument("slm", nargs="?")
@@ -200,13 +255,13 @@ def _add_train_slm_parser(commands) -> None:
     train.add_argument("--dry-run", action="store_true")
 
 
-def _add_train_plasticity_lora_parser(commands) -> None:
+def _add_train_plasticity_lora_parser(commands, *, hidden: bool = False) -> None:
     train = commands.add_parser(
         "train-plasticity-lora",
-        **parser_kwargs(
+        **_factory_parser_kwargs(
             "Train an explicit on-demand LoRA from a JSONL prompt/target dataset.",
             "slmcortex train-plasticity-lora --slm-id local_fix --name \"Local Fix\" --prompt-file data/train.jsonl --output slms/local_fix --dry-run",
-            summary="Advanced Factory: author an on-demand plasticity LoRA package.",
+            hidden=hidden,
         ),
     )
     train.add_argument("--slm-id", required=True)
@@ -222,13 +277,13 @@ def _add_train_plasticity_lora_parser(commands) -> None:
     train.add_argument("--dry-run", action="store_true")
 
 
-def _add_import_lora_parser(commands) -> None:
+def _add_import_lora_parser(commands, *, hidden: bool = False) -> None:
     import_lora = commands.add_parser(
         "import-lora",
-        **parser_kwargs(
+        **_factory_parser_kwargs(
             "Import a public Hugging Face LoRA into a local SlmCortex package.",
             "slmcortex import-lora --source hf://owner/repo --slm-id fastapi_slm --name \"FastAPI Slm\" --output slms/fastapi_slm --train-dataset data/train.jsonl --eval-dataset data/eval.jsonl",
-            summary="Advanced Factory: wrap a remote LoRA into a local package.",
+            hidden=hidden,
         ),
     )
     import_lora.add_argument("--source", required=True)
@@ -244,14 +299,14 @@ def _add_import_lora_parser(commands) -> None:
     import_lora.add_argument("--force", action="store_true")
 
 
-def _add_package_slm_parser(commands) -> None:
+def _add_package_slm_parser(commands, *, hidden: bool = False) -> None:
     package = commands.add_parser(
         "package-slm",
-        **parser_kwargs(
+        **_factory_parser_kwargs(
             "Package an existing LoRA adapter into a self-describing slm artifact.",
             "slmcortex package-slm --slm-id python_slm --name \"Python Slm\" --adapter-dir artifacts/adapters/python_slm --train-dataset tests/fixtures/slmcortex_demo/train.jsonl --eval-dataset tests/fixtures/slmcortex_demo/eval.jsonl --eval-summary tests/fixtures/slmcortex_demo/eval-summary.json --output /tmp/slmcortex-demo/python_slm\n"
             "slmcortex package-slm --slm-id debugging_slm --name \"Debugging Slm\" --adapter-dir artifacts/adapters/debugging_slm --train-dataset tests/fixtures/slmcortex_demo/train.jsonl --eval-dataset tests/fixtures/slmcortex_demo/eval.jsonl --eval-summary tests/fixtures/slmcortex_demo/eval-summary.json --output /tmp/slmcortex-demo/debugging_slm",
-            summary="Advanced Factory: package an existing adapter for Composer use.",
+            hidden=hidden,
         ),
     )
     package.add_argument("--slm-id", required=True)
@@ -273,13 +328,13 @@ def _add_package_slm_parser(commands) -> None:
     package.add_argument("--dry-run", action="store_true")
 
 
-def _add_validate_slm_package_parser(commands) -> None:
+def _add_validate_slm_package_parser(commands, *, hidden: bool = False) -> None:
     validate = commands.add_parser(
         "validate-slm-package",
-        **parser_kwargs(
+        **_factory_parser_kwargs(
             "Validate a packaged slm artifact and its recorded fingerprints.",
             "slmcortex validate-slm-package --path /tmp/slmcortex-demo/python_slm",
-            summary="Advanced Factory: verify authored package integrity.",
+            hidden=hidden,
         ),
     )
     validate.add_argument("--path", required=True)

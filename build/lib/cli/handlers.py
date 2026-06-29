@@ -24,6 +24,7 @@ from .common import csv_paths, default_dataset_outputs, infer_payload, package_c
 
 
 TaskProviderFactory = Callable[[], object]
+FACTORY_DEPENDENCY_GUARDED_COMMANDS = {"train-slm", "train-plasticity-lora"}
 
 
 def execute_command(
@@ -32,7 +33,10 @@ def execute_command(
     collect_agent_tasks: Callable[[list[str] | None], list[str] | None],
     stream_agent_tasks: TaskProviderFactory,
 ) -> dict:
-    if parsed.command == "doctor":
+    command = _resolved_command(parsed)
+    if parsed.command == "factory" and command in FACTORY_DEPENDENCY_GUARDED_COMMANDS:
+        _ensure_factory_prerequisites(parsed)
+    if command == "doctor":
         diagnostics = environment_diagnostics(
             workspace_root=Path(parsed.workspace) if parsed.workspace else None,
             product_mode=parsed.product_mode,
@@ -54,13 +58,13 @@ def execute_command(
                 "path": support_bundle,
             }
         return diagnostics
-    if parsed.command == "provision-backend":
+    if command == "provision-backend":
         return provision_backend(
             backend=parsed.backend,
             workspace_root=Path(parsed.workspace) if parsed.workspace else None,
             dry_run=parsed.dry_run,
         )
-    if parsed.command == "composer-app":
+    if command == "composer-app":
         return run_composer_app(
             folder=Path(parsed.folder),
             workspace_root=Path(parsed.workspace) if parsed.workspace else None,
@@ -81,7 +85,7 @@ def execute_command(
             trace_out=Path(parsed.trace_out) if parsed.trace_out else None,
             dry_run=parsed.dry_run,
         )
-    if parsed.command == "compose-folder":
+    if command == "compose-folder":
         return compose_from_folder(
             folder=Path(parsed.folder),
             task=parsed.task,
@@ -93,7 +97,7 @@ def execute_command(
             overwrite=parsed.overwrite,
             product_mode=parsed.product_mode,
         )
-    if parsed.command == "generate-dataset":
+    if command == "generate-dataset":
         default_output, default_eval_output = default_dataset_outputs(parsed.slm_id)
         return generate_dataset_bundle(
             slm_id=parsed.slm_id,
@@ -106,14 +110,14 @@ def execute_command(
             seed=parsed.seed,
             report_output=Path(parsed.report_output) if parsed.report_output else None,
         )
-    if parsed.command == "validate-dataset":
+    if command == "validate-dataset":
         return validate_dataset_command(
             Path(parsed.dataset),
             eval_dataset=Path(parsed.eval_dataset) if parsed.eval_dataset else None,
             min_target_length=parsed.min_target_length,
             report_output=Path(parsed.report_output) if parsed.report_output else None,
         )
-    if parsed.command == "train-slm":
+    if command == "train-slm":
         mode, slm_id, composition, defaults_applied = resolve_train_slm(parsed)
         result = train_slm_package(
             slm=slm_id,
@@ -136,7 +140,7 @@ def execute_command(
                 "default composition metadata applied for arbitrary train-slm"
             ]
         return result
-    if parsed.command == "train-plasticity-lora":
+    if command == "train-plasticity-lora":
         output = _plasticity_output(parsed)
         if parsed.dry_run:
             return {
@@ -185,7 +189,7 @@ def execute_command(
             }
         )
         return result
-    if parsed.command == "import-lora":
+    if command == "import-lora":
         return import_lora(
             source=parsed.source,
             slm_id=parsed.slm_id,
@@ -199,7 +203,7 @@ def execute_command(
             max_download_bytes=parsed.max_download_bytes,
             force=parsed.force,
         )
-    if parsed.command == "package-slm":
+    if command == "package-slm":
         return package_slm(
             slm_id=parsed.slm_id,
             name=parsed.name,
@@ -215,7 +219,7 @@ def execute_command(
             force=parsed.force,
             dry_run=parsed.dry_run,
         )
-    if parsed.command == "compose-slms":
+    if command == "compose-slms":
         return compose_slm_packages(
             slms=csv_paths(parsed.slms),
             strategy=parsed.strategy,
@@ -224,7 +228,7 @@ def execute_command(
             force=parsed.force,
             dry_run=parsed.dry_run,
         )
-    if parsed.command == "route":
+    if command == "route":
         return route_task(
             slms_dir=Path(parsed.slms_dir),
             repo=Path(parsed.repo),
@@ -232,7 +236,7 @@ def execute_command(
             explain=parsed.explain,
             current_base_model=parsed.base_model,
         )
-    if parsed.command == "compose-from-route":
+    if command == "compose-from-route":
         return compose_from_route(
             slms_dir=Path(parsed.slms_dir),
             repo=Path(parsed.repo),
@@ -242,9 +246,9 @@ def execute_command(
             allow_base=parsed.allow_base,
             overwrite=parsed.overwrite,
         )
-    if parsed.command == "validate-runtime":
+    if command == "validate-runtime":
         return validate_runtime_bundle(Path(parsed.runtime))
-    if parsed.command == "infer":
+    if command == "infer":
         if bool(parsed.runtime) == bool(parsed.slms_dir):
             raise ValueError("infer requires exactly one of --runtime or --slms-dir")
         payload = infer_payload(parsed)
@@ -268,7 +272,7 @@ def execute_command(
             temperature=payload.get("temperature"),
             dry_run=parsed.dry_run,
         )
-    if parsed.command == "serve":
+    if command == "serve":
         if bool(parsed.runtime) == bool(parsed.slms_dir):
             raise ValueError("serve requires exactly one of --runtime or --slms-dir")
         return serve_runtime(
@@ -280,7 +284,7 @@ def execute_command(
             port=parsed.port,
             dry_run=parsed.dry_run,
         )
-    if parsed.command == "agent":
+    if command == "agent":
         if parsed.agent_command != "run":
             raise ValueError(f"unknown agent command: {parsed.agent_command}")
         if bool(parsed.runtime) == bool(parsed.slms_dir):
@@ -323,6 +327,29 @@ def execute_command(
             task_provider=task_provider,
         )
     return validate_slm_package(Path(parsed.path))
+
+
+def _resolved_command(parsed: argparse.Namespace) -> str:
+    if parsed.command == "factory":
+        return parsed.factory_command
+    return parsed.command
+
+
+def _ensure_factory_prerequisites(parsed: argparse.Namespace) -> None:
+    diagnostics = environment_diagnostics(
+        workspace_root=Path(parsed.workspace) if getattr(parsed, "workspace", None) else None,
+        product_mode="factory",
+    )
+    missing = [
+        row["name"] for row in diagnostics.get("optional_factory_dependencies", []) if not row["available"]
+    ]
+    if not missing:
+        return
+    raise ValueError(
+        "factory mode prerequisites missing for training workflows: "
+        + ", ".join(missing)
+        + ". Run 'slmcortex factory doctor' to inspect the environment and install the optional extras before retrying."
+    )
 
 
 def _plasticity_output(parsed: argparse.Namespace) -> Path:

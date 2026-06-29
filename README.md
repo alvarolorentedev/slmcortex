@@ -217,7 +217,14 @@ Slm Cortex ships one public CLI with command-specific help and examples.
 
 Use `slmcortex <command> --help` for command-specific examples.
 
-Advanced Factory commands remain available for dataset generation, training, packaging, and import, but they are not required for the normal Composer install path.
+Advanced Factory mode remains available for dataset generation, training, packaging, and import, but it is now entered explicitly so the normal Composer install path stays focused:
+
+```bash
+slmcortex factory --help
+slmcortex factory doctor
+```
+
+Use `slmcortex factory doctor` before training if you are not sure the optional local training dependencies are installed. Dataset generation and dataset validation still work in the base install.
 
 ## Common Workflows
 
@@ -238,7 +245,7 @@ Defaults for the beginner command are `task_type=python_generation`, `num_exampl
 `train-slm` runs dataset validation as a mandatory preflight and fails early on malformed, duplicate, leaky, or obviously degenerate datasets.
 
 ```bash
-slmcortex train-slm \
+slmcortex factory train-slm \
   --slm-id fastapi_contract \
   --name "FastAPI Contract Slm" \
   --train-dataset datasets/fastapi_contract/train.jsonl \
@@ -262,7 +269,7 @@ slmcortex infer \
 If you want an explicit dataset quality gate before training, run the optional validator yourself:
 
 ```bash
-slmcortex validate-dataset datasets/fastapi_contract/train.jsonl \
+slmcortex factory validate-dataset datasets/fastapi_contract/train.jsonl \
   --eval-dataset datasets/fastapi_contract/eval.jsonl
 ```
 
@@ -273,7 +280,7 @@ When omitted for arbitrary `--slm-id`, composition metadata defaults to `allowed
 Canonical built-in slms such as `python_slm`, `debugging_slm`, and `test_generation_slm` still work as legacy preset shortcuts:
 
 ```bash
-slmcortex train-slm python_slm --output /tmp/slmcortex-demo/python_slm
+slmcortex factory train-slm python_slm --output /tmp/slmcortex-demo/python_slm
 ```
 
 ### Discover and route slms without a runtime
@@ -307,7 +314,7 @@ python scripts/run_dynamic_agent_acceptance_harness.py --output-root /tmp/slmcor
 ### Package an existing adapter
 
 ```bash
-slmcortex package-slm \
+slmcortex factory package-slm \
   --slm-id python_slm \
   --name "Python Slm" \
   --adapter-dir artifacts/adapters/python_slm \
