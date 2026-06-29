@@ -40,6 +40,12 @@ def _run(name: str, command: list[str], *, cwd: Path | None = None, env: dict[st
     return record
 
 
+def _launcher_command(launcher_path: Path, *args: str) -> list[str]:
+    if launcher_path.suffix.lower() == ".ps1":
+        return ["powershell", "-ExecutionPolicy", "Bypass", "-File", str(launcher_path), *args]
+    return [str(launcher_path), *args]
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Create an isolated virtual environment, install Slm Cortex, and launch the Composer-first entry point.",
@@ -80,22 +86,19 @@ def main(argv: list[str] | None = None) -> int:
             str(install_root),
         ]
     steps.append(_run("install_package", install_command, cwd=ROOT, env=env))
-    steps.append(_run("launch_help", [str(launcher_path), "--help"]))
-    steps.append(_run("composer_launcher_help", [str(composer_launcher_path), "--help"]))
+    steps.append(_run("launch_help", _launcher_command(launcher_path, "--help")))
+    steps.append(_run("composer_launcher_help", _launcher_command(composer_launcher_path, "--help")))
     steps.append(
         _run(
             "doctor",
-            [str(launcher_path), "doctor", "--workspace", str(workspace_root)],
+            _launcher_command(launcher_path, "doctor", "--workspace", str(workspace_root)),
         )
     )
     steps.append(
         _run(
             "doctor_support_bundle",
             [
-                str(launcher_path),
-                "doctor",
-                "--workspace",
-                str(workspace_root),
+                *_launcher_command(launcher_path, "doctor", "--workspace", str(workspace_root)),
                 "--export-support-bundle",
                 "--support-bundle-path",
                 str(support_bundle),
@@ -106,12 +109,7 @@ def main(argv: list[str] | None = None) -> int:
         _run(
             "package_fastapi_contract",
             [
-                str(launcher_path),
-                "package-slm",
-                "--slm-id",
-                "fastapi_contract",
-                "--name",
-                "FastAPI Contract Slm",
+                *_launcher_command(launcher_path, "package-slm", "--slm-id", "fastapi_contract", "--name", "FastAPI Contract Slm"),
                 "--adapter-dir",
                 str(adapter_dir),
                 "--output",
@@ -136,14 +134,16 @@ def main(argv: list[str] | None = None) -> int:
         _run(
             "compose_folder",
             [
-                str(launcher_path),
-                "compose-folder",
-                "--workspace",
-                str(workspace_root),
-                "--folder",
-                str(toy_repo),
-                "--task",
-                "Create a FastAPI endpoint with Pydantic validation",
+                *_launcher_command(
+                    launcher_path,
+                    "compose-folder",
+                    "--workspace",
+                    str(workspace_root),
+                    "--folder",
+                    str(toy_repo),
+                    "--task",
+                    "Create a FastAPI endpoint with Pydantic validation",
+                ),
                 "--export-descriptor",
                 str(export_descriptor),
             ],
@@ -153,15 +153,17 @@ def main(argv: list[str] | None = None) -> int:
         _run(
             "composer_app_export",
             [
-                str(composer_launcher_path),
-                "--workspace",
-                str(workspace_root),
-                "--folder",
-                str(toy_repo),
-                "--task",
-                "Create a FastAPI endpoint with Pydantic validation",
-                "--outcome",
-                "export_bundle",
+                *_launcher_command(
+                    composer_launcher_path,
+                    "--workspace",
+                    str(workspace_root),
+                    "--folder",
+                    str(toy_repo),
+                    "--task",
+                    "Create a FastAPI endpoint with Pydantic validation",
+                    "--outcome",
+                    "export_bundle",
+                ),
                 "--export-descriptor",
                 str(export_descriptor),
                 "--export-logs",
@@ -252,8 +254,8 @@ def _installer_contract(install_root: Path) -> tuple[list[str], Path, Path]:
         script = ROOT / "artifacts" / "installers" / "install-slmcortex-windows.ps1"
         return (
             ["powershell", "-ExecutionPolicy", "Bypass", "-File", str(script)],
-            install_root / "slmcortex.cmd",
-            install_root / "slmcortex-composer.cmd",
+            install_root / "Scripts" / "slmcortex.ps1",
+            install_root / "Scripts" / "slmcortex-composer.ps1",
         )
     system = os.uname().sysname
     if system == "Darwin":
