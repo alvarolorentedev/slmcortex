@@ -46,6 +46,9 @@ slmcortex = "slmcortex:main"
 [tool.setuptools]
 py-modules = ["slmcortex", "contracts", "catalog", "composer_app"]
 
+[tool.setuptools.package-data]
+slmcortex_resources = ["configs/*.yaml", "configs/*.json"]
+
 [tool.setuptools.packages.find]
 where = ["src"]
 

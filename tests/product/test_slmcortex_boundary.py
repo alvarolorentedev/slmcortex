@@ -31,6 +31,7 @@ def test_src_tree_is_flat_product_layout():
         "runtime",
         "shared",
         "slmcortex.py",
+        "slmcortex_resources",
         "training",
     }
 

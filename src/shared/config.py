@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.resources
 import os
 import platform
 from pathlib import Path
@@ -7,10 +8,39 @@ from pathlib import Path
 from .io import read_yaml
 
 
-ROOT = Path(__file__).resolve().parents[2]
-CONFIG_DIR = ROOT / "configs"
-DATA_DIR = ROOT / "data"
-ARTIFACT_DIR = ROOT / "artifacts"
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _bundled_root() -> Path | None:
+    try:
+        return Path(str(importlib.resources.files("slmcortex_resources"))).resolve()
+    except (ModuleNotFoundError, FileNotFoundError):
+        return None
+
+
+def _resolve_root() -> Path:
+    if (REPO_ROOT / "pyproject.toml").exists():
+        return REPO_ROOT
+    return _bundled_root() or REPO_ROOT
+
+
+def _resolve_dir(env_var: str, relative: str, *, require_exists: bool = False) -> Path:
+    env_path = os.environ.get(env_var)
+    if env_path:
+        return Path(env_path).expanduser().resolve()
+    candidate = REPO_ROOT / relative
+    if candidate.exists() or not require_exists:
+        return candidate
+    bundled = _bundled_root()
+    if bundled is not None:
+        return bundled / relative
+    return candidate
+
+
+ROOT = _resolve_root()
+CONFIG_DIR = _resolve_dir("SLMCORTEX_CONFIG_DIR", "configs", require_exists=True)
+DATA_DIR = _resolve_dir("SLMCORTEX_DATA_DIR", "data")
+ARTIFACT_DIR = _resolve_dir("SLMCORTEX_ARTIFACT_DIR", "artifacts")
 
 BACKEND_DEPENDENCIES = {
     "mlx": ["mlx-lm>=0.31,<0.32"],
@@ -25,8 +55,6 @@ BACKEND_DEPENDENCIES = {
 
 
 def base_config() -> dict:
-    # Use the new `SLMCORTEX_BASE_CONFIG` environment variable.
-    # Backward-compatibility with `SLMCORTEX_BASE_CONFIG` has been removed.
     env_path = os.environ.get("SLMCORTEX_BASE_CONFIG")
     config = read_yaml(Path(env_path) if env_path else CONFIG_DIR / "base.yaml")
     config.setdefault("backend", "auto")
