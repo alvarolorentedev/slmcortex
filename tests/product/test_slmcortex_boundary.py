@@ -16,13 +16,14 @@ def test_src_tree_is_flat_product_layout():
     entries = {
         path.name
         for path in (ROOT / "src").iterdir()
-        if path.name != "__pycache__"
+        if path.name != "__pycache__" and not path.name.endswith(".egg-info")
     }
     assert entries == {
         "agent",
         "catalog.py",
         "cli",
         "composer",
+        "composer_app.py",
         "contracts.py",
         "dataset_factory",
         "datasets",

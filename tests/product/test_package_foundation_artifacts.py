@@ -29,3 +29,4 @@ def test_packaged_install_doc_lists_workspace_contract_and_smokes():
     assert "install-slmcortex-macos.sh" in text
     assert "install-slmcortex-linux.sh" in text
     assert "install-slmcortex-windows.ps1" in text
+    assert "slmcortex-composer" in text

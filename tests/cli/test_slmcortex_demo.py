@@ -28,6 +28,7 @@ def test_slmcortex_root_help_lists_product_commands_and_examples():
     assert completed.returncode == 0
     assert "Compose, validate, run, and optionally author Slm Cortex packages." in completed.stdout
     assert "doctor" in completed.stdout
+    assert "composer-app" in completed.stdout
     assert "compose-folder" in completed.stdout
     assert "package-slm" in completed.stdout
     assert "compose-slms" in completed.stdout
@@ -39,6 +40,7 @@ def test_slmcortex_root_help_lists_product_commands_and_examples():
 def test_slmcortex_product_help_examples_cover_every_command():
     commands = {
         ("doctor", "--help"): "slmcortex doctor --workspace",
+        ("composer-app", "--help"): "slmcortex composer-app --folder . --task",
         ("compose-folder", "--help"): "slmcortex compose-folder --folder . --task",
         ("train-slm", "--help"): "slmcortex train-slm --slm-id fastapi_contract",
         ("package-slm", "--help"): "slmcortex package-slm --slm-id python_slm",
@@ -138,14 +140,44 @@ def test_package_product_smoke_script_runs_external_workspace_loop(tmp_path):
     assert [step["name"] for step in summary["steps"]] == [
         "doctor",
         "package_fastapi_contract",
-        "compose_folder",
+        "composer_app_export",
         "validate_runtime",
-        "infer_dry_run",
+        "composer_app_local_run",
     ]
     assert workspace_root.joinpath("packages", "fastapi_contract", "slm.yaml").exists()
     assert workspace_root.joinpath("runtimes", "toy-repo", "composition.yaml").exists()
     assert workspace_root.joinpath("exports", "toy-repo.json").exists()
     assert workspace_root.joinpath("logs", "compose-toy-repo.json").exists()
+
+
+def test_packaged_install_smoke_script_launches_composer_launcher(tmp_path):
+    workspace_root = tmp_path / "workspace"
+    install_root = tmp_path / "install"
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "scripts/run_packaged_install_smoke.py",
+            "--package-source",
+            ".",
+            "--workspace-root",
+            str(workspace_root),
+            "--install-root",
+            str(install_root),
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    summary = json.loads(completed.stdout)
+    assert summary["status"] == "complete"
+    assert [step["name"] for step in summary["steps"]] == [
+        "install_package",
+        "launch_help",
+        "composer_launcher_help",
+        "doctor",
+    ]
 
 
 def test_dynamic_adaptive_smoke_script_runs_mock_loop(tmp_path):

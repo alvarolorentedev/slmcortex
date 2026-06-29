@@ -4,23 +4,17 @@ import os
 import subprocess
 import sys
 import tempfile
-import venv
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parent.parent
 
 
-def _venv_python(venv_root: Path) -> Path:
-    if os.name == "nt":
-        return venv_root / "Scripts" / "python.exe"
-    return venv_root / "bin" / "python"
-
-
-def _run(name: str, command: list[str], *, cwd: Path | None = None) -> dict:
+def _run(name: str, command: list[str], *, cwd: Path | None = None, env: dict[str, str] | None = None) -> dict:
     completed = subprocess.run(
         command,
         cwd=cwd or ROOT,
+        env=env,
         capture_output=True,
         text=True,
     )
@@ -55,16 +49,17 @@ def main(argv: list[str] | None = None) -> int:
         if parsed.workspace_root
         else Path(tempfile.mkdtemp(prefix="slmcortex-installed-workspace-"))
     )
-    venv_root = install_root / "venv"
-    venv.EnvBuilder(with_pip=True, clear=True).create(venv_root)
-    python = _venv_python(venv_root)
+    installer_path, launcher_path, composer_launcher_path = _installer_contract(install_root)
+    env = dict(os.environ)
+    env["SLMCORTEX_INSTALL_ROOT"] = str(install_root)
 
     steps = [
-        _run("install_package", [str(python), "-m", "pip", "install", parsed.package_source]),
-        _run("launch_help", [str(python), "-m", "slmcortex", "--help"]),
+        _run("install_package", installer_path + [parsed.package_source], cwd=ROOT, env=env),
+        _run("launch_help", [str(launcher_path), "--help"]),
+        _run("composer_launcher_help", [str(composer_launcher_path), "--help"]),
         _run(
             "doctor",
-            [str(python), "-m", "slmcortex", "doctor", "--workspace", str(workspace_root)],
+            [str(launcher_path), "doctor", "--workspace", str(workspace_root)],
         ),
     ]
 
@@ -83,6 +78,22 @@ def main(argv: list[str] | None = None) -> int:
     json.dump(summary, sys.stdout, indent=2)
     sys.stdout.write("\n")
     return 0
+
+
+def _installer_contract(install_root: Path) -> tuple[list[str], Path, Path]:
+    if os.name == "nt":
+        script = ROOT / "artifacts" / "installers" / "install-slmcortex-windows.ps1"
+        return (
+            ["powershell", "-ExecutionPolicy", "Bypass", "-File", str(script)],
+            install_root / "slmcortex.cmd",
+            install_root / "slmcortex-composer.cmd",
+        )
+    system = os.uname().sysname
+    if system == "Darwin":
+        script = ROOT / "artifacts" / "installers" / "install-slmcortex-macos.sh"
+    else:
+        script = ROOT / "artifacts" / "installers" / "install-slmcortex-linux.sh"
+    return (["sh", str(script)], install_root / "slmcortex", install_root / "slmcortex-composer")
 
 
 if __name__ == "__main__":

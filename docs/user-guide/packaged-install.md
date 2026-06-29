@@ -5,7 +5,7 @@ This guide defines the Phase 1 packaged-product contract for Slm Cortex.
 The default product path is Composer-first:
 
 1. Install the launcher
-2. Run `slmcortex doctor`
+2. Run `slmcortex doctor` or open the Composer launcher
 3. Point the product at a local folder
 4. Compose a runtime
 5. Run or export the result
@@ -20,7 +20,10 @@ Advanced Factory commands remain available, but they are optional and are not pa
 | Linux | `artifacts/installers/install-slmcortex-linux.sh` | Composer-first path works without training extras |
 | Windows | `artifacts/installers/install-slmcortex-windows.ps1` | PowerShell installer creates a local launcher |
 
-Each artifact expects a wheel, source distribution, or package source path and creates an isolated virtual environment plus a launcher that runs `python -m slmcortex`.
+Each artifact expects a wheel, source distribution, or package source path and creates an isolated virtual environment plus two launchers:
+
+- `slmcortex`: the full product CLI
+- `slmcortex-composer`: the Composer App launcher that opens directly into the guided folder-to-runtime flow
 
 ## App Workspace Contract
 
@@ -46,11 +49,23 @@ Inspect the resolved contract at any time:
 ```bash
 slmcortex doctor
 slmcortex doctor --workspace /tmp/slmcortex-app
+slmcortex-composer --help
 ```
 
 ## Composer-First Flow
 
-Compose a runtime directly from a folder and the external app workspace:
+Launch the guided Composer App workflow directly from the packaged launcher:
+
+```bash
+slmcortex-composer \
+  --workspace /tmp/slmcortex-app \
+  --folder /path/to/repo \
+  --task "Create a FastAPI endpoint with request validation" \
+  --outcome export_bundle \
+  --export-logs
+```
+
+The full CLI can still compose a runtime directly from a folder and the external app workspace:
 
 ```bash
 slmcortex compose-folder \
@@ -82,4 +97,4 @@ Clean-machine style install-and-launch smoke:
 python scripts/run_packaged_install_smoke.py --package-source .
 ```
 
-The first script validates the external workspace layout, package import, compose, validation, export descriptor, and log output. The second script validates that an isolated install can launch the Composer-first entry point without relying on repository-relative runtime state.
+The first script validates the external workspace layout, package import, guided Composer App export, runtime validation, local-run dry-run agent flow, and log output. The second script validates that an isolated install can launch both the main CLI and the dedicated Composer launcher without relying on repository-relative runtime state.

@@ -115,17 +115,20 @@ def main(argv: list[str] | None = None) -> int:
     steps.extend(
         [
             _run(
-            "compose_folder",
+            "composer_app_export",
             [
-                "compose-folder",
+                "composer-app",
                 "--workspace",
                 str(workspace_root),
                 "--folder",
                 str(toy_repo),
                 "--task",
                 "Create a FastAPI endpoint with Pydantic validation",
+                "--outcome",
+                "export_bundle",
                 "--export-descriptor",
                 str(export_descriptor),
+                "--export-logs",
             ],
         ),
         _run(
@@ -137,13 +140,19 @@ def main(argv: list[str] | None = None) -> int:
             ],
         ),
         _run(
-            "infer_dry_run",
+            "composer_app_local_run",
             [
-                "infer",
-                "--runtime",
-                str(runtime_path),
-                "--request-file",
-                str(request),
+                "composer-app",
+                "--workspace",
+                str(workspace_root),
+                "--folder",
+                str(toy_repo),
+                "--task",
+                "Create a FastAPI endpoint with Pydantic validation",
+                "--outcome",
+                "local_run",
+                "--run-target",
+                "agent_flow",
                 "--dry-run",
             ],
         ),

@@ -44,7 +44,7 @@ test = [
 slmcortex = "slmcortex:main"
 
 [tool.setuptools]
-py-modules = ["slmcortex", "contracts"]
+py-modules = ["slmcortex", "contracts", "catalog", "composer_app"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
