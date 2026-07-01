@@ -12,6 +12,12 @@ The default product path is Composer-first:
 
 Advanced Factory commands remain available, but they are optional and are not part of the normal install path.
 
+If you want a project-owned LoRA workflow instead of the folder-to-runtime path, use:
+
+1. `slmcortex init`
+2. Edit `.slmcortex.yaml` and list the Hugging Face LoRAs you want
+3. `slmcortex loras download <name>` then `slmcortex serve` or `slmcortex agent run --task "..."`
+
 ## Supported Platform Matrix
 
 | Target | Baseline artifact | Notes |

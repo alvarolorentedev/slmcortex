@@ -6,12 +6,14 @@ from ...shared.product import PRODUCT_MODES
 from ..common import parser_kwargs
 from .agent import add_agent_parser
 from .composer import (
+    add_init_parser,
     add_compose_from_folder_parser,
     add_compose_from_route_parser,
     add_compose_slms_parser,
     add_composer_app_parser,
     add_doctor_parser,
     add_infer_parser,
+    add_loras_parser,
     add_provision_backend_parser,
     add_route_parser,
     add_serve_parser,
@@ -41,10 +43,11 @@ def build_parser() -> argparse.ArgumentParser:
         required=True,
         title="product commands",
         metavar=(
-            "{doctor,provision-backend,composer-app,compose-folder,validate-runtime,route,"
+            "{init,doctor,provision-backend,composer-app,compose-folder,validate-runtime,route,"
             "compose-from-route,infer,serve,agent,factory,compose-slms}"
         ),
     )
+    add_init_parser(commands)
     add_doctor_parser(commands)
     add_provision_backend_parser(commands)
     add_composer_app_parser(commands)
@@ -53,6 +56,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_route_parser(commands)
     add_compose_from_route_parser(commands)
     add_infer_parser(commands)
+    add_loras_parser(commands)
     add_serve_parser(commands)
     add_agent_parser(commands)
     add_factory_parser(commands)

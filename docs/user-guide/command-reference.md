@@ -10,12 +10,16 @@ follow-up to the [quickstart](quickstart.md).
   agent behavior.
 - `doctor`, `compose-folder`, `route`, `compose-from-route`, `infer`, `serve`,
   and `agent run` are the Composer-first product path.
+- `init` creates the project-local `.slmcortex` folders and `.slmcortex.yaml`.
+- `loras download` installs selected Hugging Face LoRAs into the project-local
+  SLM directory.
 - `generate-dataset`, `train-slm`, `package-slm`, and related authoring
   commands are advanced Factory commands.
 - `train-slm` accepts either a preset positional slm name or an explicit
   `--slm-id`.
 - `infer` requires exactly one of `--runtime` or `--slms-dir`.
-- `agent run` requires exactly one of `--runtime` or `--slms-dir`.
+- `agent run` requires exactly one of `--runtime` or `--slms-dir` unless
+  `.slmcortex.yaml` provides project defaults.
 - `train-plasticity-lora` requires exactly one of `--output` or
   `--publish-dir`.
 - Backend selection comes from base config: `backend: auto | mlx | gguf`.
@@ -27,6 +31,7 @@ follow-up to the [quickstart](quickstart.md).
 
 | Command | Reads | Writes | Best For |
 | --- | --- | --- | --- |
+| `init` | project root | `.slmcortex/`, `.slmcortex.yaml` | starting a project-owned LoRA workspace |
 | `doctor` | platform, optional deps | diagnostics result | checking packaged-app readiness |
 | `compose-folder` | folder, workspace, task | runtime bundle, export descriptor, logs | one-step folder-to-runtime composition |
 | `generate-dataset` | slm id, domain | train/eval JSONL, report | bootstrapping training data |
@@ -43,6 +48,7 @@ follow-up to the [quickstart](quickstart.md).
 | `infer` | runtime or slms dir, prompt or request file | inference result or dry-run route | running model-backed or dry-run inference |
 | `serve` | runtime bundle | server process | exposing the OpenAI-compatible API |
 | `agent run` | runtime or slms dir, repo, task | trace, diffs, optional writes | bounded repo work on a local checkout |
+| `loras download` | LoRA names or `hf://` URL | project-local SLM package(s) | downloading selected project-owned LoRAs |
 
 ## `doctor`
 
@@ -313,6 +319,47 @@ local package contract.
 When the resolved backend is GGUF, import converts the downloaded PEFT LoRA to
 `adapter/adapter.gguf`; set `gguf_converter` in the selected base config.
 
+## `loras`
+
+Manage project-owned LoRAs declared in `.slmcortex.yaml`.
+
+Public subcommands:
+
+- `download`
+
+Use `slmcortex loras download ...` to fetch only the LoRAs you listed in the
+project config, or pass a one-off `hf://owner/repo` URL with `--as`.
+
+## `loras download`
+
+Download selected Hugging Face LoRAs into the project-local SLM directory.
+
+Required input:
+
+- one or more LoRA names from `.slmcortex.yaml`
+- one `hf://owner/repo` URL with `--as`
+- or `--all` to download every configured LoRA
+
+Optional flags:
+
+- `--as` names a one-off `hf://` download
+- `--force`
+
+Writes:
+
+- one packaged slm directory per selected LoRA
+- cached remote downloads under the project cache directory
+
+Example:
+
+```bash
+slmcortex loras download fastapi
+slmcortex loras download hf://owner/repo --as fastapi
+```
+
+Use this when you want the user-owned project config to control which LoRAs are
+available locally.
+
 ## `package-slm`
 
 Package an existing adapter into a self-describing slm artifact.
@@ -511,6 +558,8 @@ Run inference or a dry-run route decision against a runtime bundle.
 Required input:
 
 - exactly one of `--runtime` or `--slms-dir`
+- if neither is given, `.slmcortex.yaml` can provide the project-local
+  `slms_dir`
 - exactly one of `--prompt` or `--request-file`
 
 Behavior:
@@ -582,6 +631,8 @@ slmcortex serve --slms-dir slms --allow-remote-loras --dry-run
 
 Use `--dry-run` to check the serving configuration without starting the server.
 Use `--slms-dir` when you want the folder-based runtime path without composing a bundle first.
+If `.slmcortex.yaml` exists, `slmcortex serve` can default to the project-local
+`slms_dir`.
 Use the real server mode when you want a drop-in compatibility endpoint.
 
 ## `agent`
@@ -593,6 +644,8 @@ Public subcommands:
 - `run`
 
 Use `slmcortex agent run ...` for actual execution.
+If `.slmcortex.yaml` exists, `slmcortex agent run --task "..."` can default to
+the current project as the repo and the project-local `slms_dir`.
 
 ## `agent run`
 
@@ -601,7 +654,7 @@ Run the bounded local agent on top of a runtime bundle.
 Required input:
 
 - exactly one of `--runtime` or `--slms-dir`
-- `--repo`
+- `--repo`, unless `.slmcortex.yaml` supplies the project default
 
 Behavior:
 

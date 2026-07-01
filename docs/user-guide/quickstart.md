@@ -115,6 +115,16 @@ If you want Slm Cortex to act as your local coding agent instead of only
 running the static runtime demo, continue with the
 [local coding agent setup](local-coding-agent-setup.md).
 
+If you are using the project-owned LoRA flow on an installed package, the
+short path is:
+
+```bash
+slmcortex init
+slmcortex loras download <name>
+slmcortex serve
+slmcortex agent run --task "Fix the failing API validation test"
+```
+
 ## 7. Read the command reference
 
 Once the quickstart works, move to the [command reference](command-reference.md) for the full flag-by-flag guide.

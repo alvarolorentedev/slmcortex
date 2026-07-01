@@ -8,9 +8,18 @@ from ...agent import run_agent
 from ...catalog import compose_from_folder, compose_from_route, route_task
 from ...composer import compose_slm_packages
 from ...composer_app import run_composer_app, write_support_bundle
+from ...packaging.importers import import_lora
 from ...packaging import train_slm_package, validate_slm_package
 from ...runtime import DynamicRuntime, SlmRuntime, serve_runtime, validate_runtime_bundle
 from ...shared.product import environment_diagnostics
+from ...shared.project import (
+    configured_loras,
+    init_project,
+    load_project_config,
+    project_cache_dir,
+    project_dataset,
+    project_slms_dir,
+)
 from ...shared.provisioning import provision_backend
 from ..common import csv_paths, infer_payload
 from .dynamic_agent import default_dynamic_runtime_path, run_dynamic_agent
@@ -33,6 +42,8 @@ def execute_command(
     command = _resolved_command(parsed)
     if parsed.command == "factory" and command in FACTORY_DEPENDENCY_GUARDED_COMMANDS:
         ensure_factory_prerequisites(parsed, environment_diagnostics_fn=environment_diagnostics)
+    if command == "init":
+        return init_project(Path(parsed.project))
     if command == "doctor":
         return _doctor(parsed)
     if command == "provision-backend":
@@ -95,6 +106,8 @@ def execute_command(
         return validate_runtime_bundle(Path(parsed.runtime))
     if command == "infer":
         return _infer(parsed)
+    if command == "loras":
+        return _loras(parsed)
     if command == "serve":
         return _serve(parsed)
     if command == "agent":
@@ -155,6 +168,7 @@ def _composer_app(parsed) -> dict:
 
 
 def _infer(parsed) -> dict:
+    _apply_project_runtime_defaults(parsed)
     if bool(parsed.runtime) == bool(parsed.slms_dir):
         raise ValueError("infer requires exactly one of --runtime or --slms-dir")
     payload = infer_payload(parsed)
@@ -181,6 +195,7 @@ def _infer(parsed) -> dict:
 
 
 def _serve(parsed) -> dict:
+    _apply_project_runtime_defaults(parsed)
     if bool(parsed.runtime) == bool(parsed.slms_dir):
         raise ValueError("serve requires exactly one of --runtime or --slms-dir")
     return serve_runtime(
@@ -197,8 +212,13 @@ def _serve(parsed) -> dict:
 def _agent(parsed, collect_agent_tasks, stream_agent_tasks) -> dict:
     if parsed.agent_command != "run":
         raise ValueError(f"unknown agent command: {parsed.agent_command}")
+    _apply_project_runtime_defaults(parsed)
+    if not parsed.repo and parsed.slms_dir:
+        parsed.repo = "."
     if bool(parsed.runtime) == bool(parsed.slms_dir):
         raise ValueError("agent run requires exactly one of --runtime or --slms-dir")
+    if not parsed.repo:
+        raise ValueError("agent run requires --repo unless .slmcortex.yaml provides project defaults")
     if parsed.slms_dir:
         return _dynamic_agent(parsed, collect_agent_tasks)
     tasks = collect_agent_tasks(parsed.task)
@@ -237,3 +257,81 @@ def _dynamic_agent(parsed, collect_agent_tasks) -> dict:
         compose_from_route_fn=compose_from_route,
         run_agent_fn=run_agent,
     )
+
+
+def _loras(parsed) -> dict:
+    if parsed.lora_command != "download":
+        raise ValueError(f"unknown loras command: {parsed.lora_command}")
+    return _download_loras(parsed)
+
+
+def _download_loras(parsed) -> dict:
+    config = load_project_config()
+    items = list(parsed.items or [])
+    if not items and not parsed.all:
+        raise ValueError("choose LoRA names or use --all")
+    if parsed.all and items:
+        raise ValueError("use LoRA names or --all, not both")
+    hf_items = [item for item in items if item.startswith("hf://")]
+    if hf_items and (len(items) != 1 or not parsed.as_name):
+        raise ValueError("one-off Hugging Face downloads require exactly one hf:// URL and --as")
+    if parsed.as_name and not hf_items:
+        raise ValueError("--as is only valid with a one-off hf:// URL")
+
+    slms_dir = project_slms_dir(config) or Path(".slmcortex/slms")
+    cache_dir = project_cache_dir(config)
+    train_dataset = project_dataset(config, "train_dataset", "train.jsonl")
+    eval_dataset = project_dataset(config, "eval_dataset", "eval.jsonl")
+    entries = _download_entries(config, items, parsed.all, parsed.as_name)
+    downloaded = []
+    results = []
+    for slm_id, entry in entries:
+        source = entry.get("source")
+        if not isinstance(source, str) or not source.startswith("hf://"):
+            raise ValueError(f"{slm_id}: source must be hf://owner/repo[@revision]")
+        result = import_lora(
+            source=source,
+            slm_id=slm_id,
+            name=str(entry.get("name") or slm_id.replace("_", " ").title()),
+            output=slms_dir / slm_id,
+            train_dataset=train_dataset,
+            eval_dataset=eval_dataset,
+            description=entry.get("description"),
+            cache_dir=cache_dir,
+            force=parsed.force,
+        )
+        downloaded.append(slm_id)
+        results.append(result)
+    return {
+        "status": "complete",
+        "downloaded": downloaded,
+        "slms_dir": str(slms_dir.resolve()),
+        "lora_cache_dir": str(cache_dir.resolve()),
+        "results": results,
+    }
+
+
+def _download_entries(config: dict, items: list[str], download_all: bool, as_name: str | None) -> list[tuple[str, dict]]:
+    if items and items[0].startswith("hf://"):
+        return [(as_name, {"source": items[0], "name": as_name})]
+    loras = configured_loras(config)
+    if download_all:
+        if not loras:
+            raise ValueError("no LoRAs configured in .slmcortex.yaml")
+        names = sorted(loras)
+    else:
+        names = items
+    missing = [name for name in names if name not in loras]
+    if missing:
+        raise ValueError(f"unknown LoRA(s): {', '.join(missing)}")
+    return [(name, loras[name]) for name in names]
+
+
+def _apply_project_runtime_defaults(parsed) -> None:
+    if parsed.runtime or parsed.slms_dir:
+        return
+    slms_dir = project_slms_dir(load_project_config())
+    if slms_dir is not None:
+        parsed.slms_dir = str(slms_dir)
+        if hasattr(parsed, "allow_remote_loras"):
+            parsed.allow_remote_loras = True

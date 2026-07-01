@@ -9,6 +9,8 @@ This guide uses the current adaptive prototype path:
 - optional plasticity LoRA training when routing decides a new adapter is needed
 - bounded local agent execution against a repository checkout
 
+If you are using the installed project-owned flow, create `.slmcortex.yaml`, add the Hugging Face LoRAs you want, run `slmcortex loras download <name>`, then use `slmcortex serve` and `slmcortex agent run --task "..."` from that project directory.
+
 Start with the safe no-model flow, then enable the adaptive runtime only after the basic checks pass.
 
 ## 1. Pick your backend

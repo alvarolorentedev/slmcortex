@@ -97,6 +97,38 @@ python -m slmcortex --help
 python -m slmcortex doctor
 ```
 
+### Installed app: project LoRAs in 3 steps
+
+From the project you want Slm Cortex to use:
+
+```bash
+slmcortex init
+```
+
+Edit `.slmcortex.yaml` and add only the Hugging Face LoRAs you want:
+
+```yaml
+loras:
+  fastapi:
+    source: hf://owner/fastapi-lora
+    name: FastAPI LoRA
+    description: FastAPI and Pydantic coding tasks
+```
+
+Download selected LoRAs, then run from the project defaults:
+
+```bash
+slmcortex loras download fastapi
+slmcortex serve
+slmcortex agent run --task "Fix the failing API validation test"
+```
+
+For a one-off LoRA URL:
+
+```bash
+slmcortex loras download hf://owner/repo --as fastapi
+```
+
 ### Platform guidance
 
 - Python 3.11+ is required

@@ -28,6 +28,7 @@ Keep this repo work minimal. Optimize for the fewest tokens, the fewest commands
 - Make the smallest change that solves the request.
 - Avoid new abstractions, helper layers, or “future proofing” unless the user explicitly asks.
 - Prefer updating one file over spreading logic across multiple files.
+- When CLI, install, or UX changes affect user steps, update the matching docs under `docs/` and `README.md` in the same change. Keep `command-reference.md`, `quickstart.md`, `packaged-install.md`, and `local-coding-agent-setup.md` aligned with the code.
 
 ## Validation
 

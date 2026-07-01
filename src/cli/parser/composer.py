@@ -5,6 +5,18 @@ from ...contracts import TASK_TYPES
 from ..common import parser_kwargs
 
 
+def add_init_parser(commands) -> None:
+    init = commands.add_parser(
+        "init",
+        **parser_kwargs(
+            "Initialize project-local Slm Cortex folders and .slmcortex.yaml.",
+            "slmcortex init",
+            summary="Composer: create the project-local config and LoRA folders.",
+        ),
+    )
+    init.add_argument("--project", default=".")
+
+
 def add_doctor_parser(commands) -> None:
     doctor = commands.add_parser(
         "doctor",
@@ -169,6 +181,29 @@ def add_infer_parser(commands) -> None:
     infer.add_argument("--max-tokens", type=int)
     infer.add_argument("--temperature", type=float)
     infer.add_argument("--dry-run", action="store_true")
+
+
+def add_loras_parser(commands) -> None:
+    loras = commands.add_parser(
+        "loras",
+        **parser_kwargs(
+            "Manage project-local LoRAs declared in .slmcortex.yaml.",
+            "slmcortex loras download fastapi\nslmcortex loras download hf://owner/repo --as fastapi",
+            summary="Composer: download selected Hugging Face LoRAs into this project.",
+        ),
+    )
+    lora_commands = loras.add_subparsers(dest="lora_command", required=True)
+    download = lora_commands.add_parser(
+        "download",
+        **parser_kwargs(
+            "Download selected Hugging Face LoRAs into the project SLM folder.",
+            "slmcortex loras download fastapi\nslmcortex loras download --all\nslmcortex loras download hf://owner/repo --as fastapi",
+        ),
+    )
+    download.add_argument("items", nargs="*")
+    download.add_argument("--as", dest="as_name")
+    download.add_argument("--all", action="store_true")
+    download.add_argument("--force", action="store_true")
 
 
 def add_serve_parser(commands) -> None:

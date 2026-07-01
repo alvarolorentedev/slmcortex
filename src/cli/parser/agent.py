@@ -25,7 +25,7 @@ def add_agent_parser(commands) -> None:
     )
     agent_run.add_argument("--runtime")
     agent_run.add_argument("--slms-dir", dest="slms_dir")
-    agent_run.add_argument("--repo", required=True)
+    agent_run.add_argument("--repo")
     agent_run.add_argument(
         "--task",
         action="append",
