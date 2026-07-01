@@ -14,8 +14,8 @@ from .diffing import (
 
 
 WRITE_MODES = ("off", "confirm", "on")
-SKIP_DIRS = {".git", ".venv", ".slmcortex", "__pycache__", ".pytest_cache", ".ruff_cache"}
-ARTIFACT_DIR_PREFIXES = ("datasets/", "runtime/", "slms/", "tmp/")
+SKIP_DIRS = {".git", ".venv", ".slmcortex", "__pycache__", ".pytest_cache", ".ruff_cache", "artifacts", "build", "dist"}
+ARTIFACT_DIR_PREFIXES = ("artifacts/", "build/", "datasets/", "dist/", "runtime/", "slms/", "tmp/")
 CODE_FILE_SUFFIXES = (".py", ".pyi", ".ts", ".tsx", ".js", ".jsx")
 TEXT_FILE_SUFFIXES = CODE_FILE_SUFFIXES + (".md", ".txt", ".json", ".yaml", ".yml")
 

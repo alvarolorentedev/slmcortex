@@ -4,6 +4,11 @@ from .sandbox import ARTIFACT_DIR_PREFIXES, CODE_FILE_SUFFIXES, TEXT_FILE_SUFFIX
 
 
 def choose_patch_target(files: list[str], task: str) -> str:
+    if wants_api_file(task):
+        for path in preferred_source_files(files):
+            if path in {"app.py", "main.py", "api.py", "src/app.py", "src/main.py", "src/api.py"}:
+                return path
+        return default_new_source_path(task)
     for path in preferred_source_files(files):
         if path.endswith(".py") and not path.startswith("tests/"):
             return path
@@ -56,7 +61,11 @@ def is_artifact_path(path: str) -> bool:
 
 
 def default_new_source_path(task: str) -> str:
-    lowered = task.lower()
-    if any(token in lowered for token in ("fastapi", "endpoint", "router", "api")):
+    if wants_api_file(task):
         return "app.py"
     return "main.py"
+
+
+def wants_api_file(task: str) -> bool:
+    lowered = task.lower()
+    return any(token in lowered for token in ("fastapi", "endpoint", "router", "api"))

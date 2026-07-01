@@ -686,6 +686,38 @@ def test_agent_run_avoids_artifact_files_when_repo_has_no_source_files(tmp_path,
     assert result["steps"][2]["files_changed"] == ["app.py"]
 
 
+def test_agent_run_endpoint_task_prefers_new_app_file_over_unrelated_source(tmp_path, monkeypatch, capsys):
+    repo = tmp_path / "repo"
+    (repo / "src" / "agent").mkdir(parents=True)
+    (repo / "src" / "agent" / "context.py").write_text("HELPER = True\n")
+    fake_runtime = FakeRawCodeRuntime()
+
+    monkeypatch.setattr("slmcortex.agent.SlmRuntime.load", lambda path: fake_runtime)
+
+    assert (
+        main(
+            [
+                "agent",
+                "run",
+                "--runtime",
+                str(tmp_path / "runtime"),
+                "--repo",
+                str(repo),
+                "--task",
+                "Create a user endpoint for FastAPI.",
+                "--write-mode",
+                "on",
+            ]
+        )
+        == 0
+    )
+
+    result = json.loads(capsys.readouterr().out)
+    assert repo.joinpath("app.py").exists()
+    assert repo.joinpath("src", "agent", "context.py").read_text() == "HELPER = True\n"
+    assert result["generated_actions"][0]["path"] == "app.py"
+
+
 def test_agent_run_loops_over_multiple_task_inputs(tmp_path, monkeypatch, capsys):
     repo = _toy_repo(tmp_path)
     fake_runtime = FakeRuntime()
